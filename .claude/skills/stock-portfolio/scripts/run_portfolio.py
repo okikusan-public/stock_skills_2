@@ -62,7 +62,7 @@ _IMPORT_REGISTRY = [
     ("src.core.portfolio.simulator", "SIMULATOR", [
         ("simulate_portfolio", None),
     ]),
-    ("src.output.portfolio_formatter", "SIMULATION_FORMATTER", [
+    ("src.output.simulate_formatter", "SIMULATION_FORMATTER", [
         ("format_simulation", None),
     ]),
     ("src.data.history_store", "HISTORY", [
@@ -79,9 +79,10 @@ _IMPORT_REGISTRY = [
         ("calculate_shareholder_return", None),
     ]),
     ("src.core.portfolio.portfolio_simulation", "WHAT_IF", [
-        ("parse_add_arg", None), ("run_what_if_simulation", None),
+        ("parse_add_arg", None), ("parse_remove_arg", None),
+        ("run_what_if_simulation", None),
     ]),
-    ("src.output.portfolio_formatter", "WHAT_IF_FORMATTER", [
+    ("src.output.simulate_formatter", "WHAT_IF_FORMATTER", [
         ("format_what_if", None),
     ]),
     ("src.core.portfolio.portfolio_manager", "SHAREHOLDER_ANALYSIS", [
@@ -976,23 +977,37 @@ def cmd_simulate(
 # Command: what-if (KIK-376)
 # ---------------------------------------------------------------------------
 
-def cmd_what_if(csv_path: str, add_str: str) -> None:
-    """Run What-If simulation: add proposed stocks and compare metrics."""
+def cmd_what_if(
+    csv_path: str,
+    add_str: str | None,
+    remove_str: str | None = None,
+) -> None:
+    """Run What-If simulation: add/remove stocks and compare metrics. (KIK-451)"""
     if not HAS_WHAT_IF:
         print("Error: portfolio_simulation モジュールが見つかりません。")
         sys.exit(1)
 
-    # 1. Parse --add argument
+    if not add_str and not remove_str:
+        print("Error: --add または --remove のいずれかを指定してください。")
+        sys.exit(1)
+
+    # 1. Parse arguments
     try:
-        proposed = parse_add_arg(add_str)
+        proposed = parse_add_arg(add_str) if add_str else []
     except ValueError as e:
-        print(f"Error: {e}")
+        print(f"Error (--add): {e}")
+        sys.exit(1)
+
+    try:
+        removals = parse_remove_arg(remove_str) if remove_str else None
+    except ValueError as e:
+        print(f"Error (--remove): {e}")
         sys.exit(1)
 
     print("What-If シミュレーション実行中...\n")
 
     # 2. Run simulation
-    result = run_what_if_simulation(csv_path, proposed, yahoo_client)
+    result = run_what_if_simulation(csv_path, proposed, yahoo_client, removals=removals)
 
     # 3. Output
     if HAS_WHAT_IF_FORMATTER:
@@ -1209,11 +1224,15 @@ def main():
         help="配当再投資しない",
     )
 
-    # what-if (KIK-376)
-    whatif_parser = subparsers.add_parser("what-if", help="What-Ifシミュレーション")
+    # what-if (KIK-376 / KIK-451)
+    whatif_parser = subparsers.add_parser("what-if", help="What-Ifシミュレーション (追加/スワップ)")
     whatif_parser.add_argument(
-        "--add", required=True,
+        "--add", required=False, default=None,
         help="追加銘柄 (形式: SYMBOL:SHARES:PRICE,... 例: 7203.T:100:2850,AAPL:10:250)",
+    )
+    whatif_parser.add_argument(
+        "--remove", required=False, default=None,
+        help="売却銘柄 (形式: SYMBOL:SHARES,... 価格不要・時価で試算 例: 7203.T:100)",
     )
 
     # backtest (KIK-368)
@@ -1290,7 +1309,11 @@ def main():
             reinvest_dividends=args.reinvest_dividends,
         )
     elif args.command == "what-if":
-        cmd_what_if(csv_path=csv_path, add_str=args.add)
+        cmd_what_if(
+            csv_path=csv_path,
+            add_str=getattr(args, "add", None),
+            remove_str=getattr(args, "remove", None),
+        )
     elif args.command == "backtest":
         cmd_backtest(
             preset=args.preset,

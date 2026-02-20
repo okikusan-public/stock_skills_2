@@ -1,10 +1,13 @@
-"""What-If portfolio simulation (KIK-376).
+"""What-If portfolio simulation (KIK-376, KIK-451).
 
-Temporarily adds proposed stocks to the portfolio and compares
+Temporarily adds/removes stocks from the portfolio and compares
 before/after metrics (snapshot, concentration, forecast, health).
 Uses a temp CSV approach to leverage existing csv_path-based functions.
+
+KIK-451: Added swap simulation support via --remove argument.
 """
 
+import copy
 import os
 import tempfile
 
@@ -91,6 +94,146 @@ def parse_add_arg(add_str: str) -> list[dict]:
     return results
 
 
+def parse_remove_arg(remove_str: str) -> list[dict]:
+    """Parse --remove argument into a list of removal specs.
+
+    Format: "SYMBOL:SHARES,SYMBOL:SHARES,..."
+    Note: NO price field — proceeds are computed from current market value.
+
+    Parameters
+    ----------
+    remove_str : str
+        Comma-separated entries of "SYMBOL:SHARES".
+
+    Returns
+    -------
+    list[dict]
+        Each dict has: symbol (str), shares (int).
+
+    Raises
+    ------
+    ValueError
+        If format is invalid, symbol is empty, or shares is not a positive integer.
+    """
+    if not remove_str or not remove_str.strip():
+        raise ValueError("--remove の値が空です。形式: SYMBOL:SHARES")
+
+    results: list[dict] = []
+    entries = [e.strip() for e in remove_str.split(",") if e.strip()]
+
+    for entry in entries:
+        parts = entry.split(":")
+        if len(parts) != 2:
+            raise ValueError(
+                f"不正な形式: '{entry}' — SYMBOL:SHARES の形式で指定してください（価格不要）"
+            )
+
+        symbol = parts[0].strip()
+        if not symbol:
+            raise ValueError(f"銘柄シンボルが空です: '{entry}'")
+
+        try:
+            shares = int(parts[1].strip())
+        except ValueError:
+            raise ValueError(
+                f"株数が不正です: '{parts[1].strip()}' in '{entry}'"
+            )
+        if shares <= 0:
+            raise ValueError(
+                f"株数は正の整数を指定してください: {shares} in '{entry}'"
+            )
+
+        results.append({"symbol": symbol, "shares": shares})
+
+    return results
+
+
+def remove_positions(current: list[dict], removals: list[dict]) -> list[dict]:
+    """Remove specified shares from the current portfolio (simulation only).
+
+    Does not modify the original portfolio CSV.
+    Input lists are not mutated (deep copy).
+
+    Parameters
+    ----------
+    current : list[dict]
+        Current portfolio (from load_portfolio).
+    removals : list[dict]
+        Removal specs from parse_remove_arg. Each dict has: symbol, shares.
+
+    Returns
+    -------
+    list[dict]
+        Portfolio after applying removals (positions with 0 shares are deleted).
+
+    Raises
+    ------
+    ValueError
+        If a removal symbol is not found in current, or if removal shares
+        exceed held shares.
+    """
+    merged = copy.deepcopy(current)
+    symbol_map: dict[str, int] = {
+        p["symbol"].upper(): i for i, p in enumerate(merged)
+    }
+
+    for removal in removals:
+        key = removal["symbol"].upper()
+        if key not in symbol_map:
+            raise ValueError(
+                f"{removal['symbol']} はポートフォリオに存在しません"
+            )
+        idx = symbol_map[key]
+        held = merged[idx]["shares"]
+        if removal["shares"] > held:
+            raise ValueError(
+                f"保有数を超えています: {removal['symbol']} 保有 {held} 株に対して "
+                f"{removal['shares']} 株の売却を指定"
+            )
+        merged[idx] = dict(merged[idx])
+        merged[idx]["shares"] = held - removal["shares"]
+
+    return [p for p in merged if p["shares"] > 0]
+
+
+def _compute_proceeds(
+    removals: list[dict],
+    snapshot_positions: list[dict],
+) -> float:
+    """Compute total proceeds in JPY from selling specified positions at market price.
+
+    Uses evaluation_jpy from the before-snapshot to price each removal.
+    Partial removals are prorated: (removal_shares / held_shares) * evaluation_jpy.
+
+    Parameters
+    ----------
+    removals : list[dict]
+        Removal specs from parse_remove_arg. Each dict has: symbol, shares.
+    snapshot_positions : list[dict]
+        Positions from get_snapshot() result["positions"].
+
+    Returns
+    -------
+    float
+        Total proceeds in JPY. Returns 0.0 for any symbol not found in snapshot.
+    """
+    pos_map = {p["symbol"].upper(): p for p in snapshot_positions}
+    total = 0.0
+    for removal in removals:
+        pos = pos_map.get(removal["symbol"].upper())
+        if pos is None:
+            continue
+        held = pos.get("shares", 0)
+        if held <= 0:
+            continue
+        ratio = min(removal["shares"] / held, 1.0)
+        # Note: if evaluation_jpy is 0 (API price fetch failed), proceeds will be 0
+        # for this position. This is graceful degradation — the caller should check
+        # whether proceeds_jpy is plausible relative to the position size.
+        total += ratio * pos.get("evaluation_jpy", 0.0)
+    return total
+
+
 def _extract_metrics(snapshot: dict, structure: dict, forecast: dict) -> dict:
     """Extract flat comparison metrics from analysis results."""
     portfolio_return = forecast.get("portfolio", {})
@@ -126,14 +269,18 @@ def _compute_required_cash(
 
 
 def _compute_judgment(
-    before: dict, after: dict, proposed_health: list[dict]
+    before: dict,
+    after: dict,
+    proposed_health: list[dict],
+    removed_health: list[dict] | None = None,
 ) -> dict:
-    """Compute recommendation judgment based on 3 axes.
+    """Compute recommendation judgment based on 4 axes.
 
     Axes:
     1. Diversification: HHI change (sector_hhi as primary)
     2. Return: forecast_base change
     3. Health: exit signals in proposed stocks
+    4. Removed health: exit/caution in sold stocks (positive factor, KIK-451)
 
     Returns
     -------
@@ -195,6 +342,20 @@ def _compute_judgment(
             alert_label = alert.get("label", level)
             reasons.append(f"注意シグナル: {symbol} ({alert_label})")
 
+    # 4. Removed stocks health (KIK-451): exit/caution in sold stocks is a positive signal.
+    #    Design intent: adds to "reasons" text only. Does NOT override the recommendation
+    #    judgment (e.g. HHI worsening + return drop still yields "not_recommended" even
+    #    if an exit stock was sold). The positive signal is surfaced as context for the
+    #    user, not as a mechanical override — selling one bad stock does not compensate
+    #    for degraded diversification or lower expected returns.
+    for ph in (removed_health or []):
+        alert = ph.get("alert", {})
+        level = alert.get("level", "none")
+        symbol = ph.get("symbol", "")
+        if level in ("exit", "caution", "early_warning"):
+            alert_label = alert.get("label", level)
+            reasons.append(f"撤退/注意対象を売却: {symbol} ({alert_label})")
+
     # Judgment logic
     if has_exit or (hhi_worsened and ret_worsened):
         recommendation = "not_recommended"
@@ -220,6 +381,7 @@ def run_what_if_simulation(
     csv_path: str,
     proposed: list[dict],
     client,
+    removals: list[dict] | None = None,
 ) -> dict:
     """Run What-If simulation comparing before/after portfolio metrics.
 
@@ -231,14 +393,22 @@ def run_what_if_simulation(
     csv_path : str
         Path to the current portfolio CSV.
     proposed : list[dict]
-        Proposed positions (from parse_add_arg).
+        Proposed positions (from parse_add_arg). May be empty for sell-only.
     client
         yahoo_client module.
+    removals : list[dict] | None
+        Removal specs from parse_remove_arg (KIK-451). Each dict has:
+        symbol, shares. None = add-only mode (existing behavior unchanged).
 
     Returns
     -------
     dict
         Simulation result with before/after comparison.
+        KIK-451: When removals is not None, also includes:
+          "removals": enriched list (each dict gains "proceeds_jpy" key)
+          "removed_health": list of health check results for removed stocks
+          "proceeds_jpy": total JPY proceeds from removals
+          "net_cash_jpy": proceeds_jpy - required_cash_jpy
     """
     # 1. Load current portfolio
     current = load_portfolio(csv_path)
@@ -251,17 +421,23 @@ def run_what_if_simulation(
         before_snapshot, before_structure, before_forecast
     )
 
-    # 3. Merge positions
-    merged = merge_positions(current, proposed)
+    # 3. (KIK-451) Apply removals: build after_current with specified shares removed
+    if removals:
+        after_current = remove_positions(current, removals)
+    else:
+        after_current = current
 
-    # 4. Write to temp CSV
+    # 4. Merge proposed into after_current
+    merged = merge_positions(after_current, proposed)
+
+    # 5. Write to temp CSV
     temp_fd, temp_path = tempfile.mkstemp(suffix=".csv", prefix="whatif_")
     os.close(temp_fd)
 
     try:
         save_portfolio(merged, temp_path)
 
-        # 5. After analysis (new stocks will need API calls,
+        # 6. After analysis (new stocks will need API calls,
         #    existing stocks hit yahoo_client's 24h cache)
         after_snapshot = get_snapshot(temp_path, client)
         after_structure = get_structure_analysis(temp_path, client)
@@ -270,7 +446,7 @@ def run_what_if_simulation(
             after_snapshot, after_structure, after_forecast
         )
 
-        # 6. Health check on proposed stocks only
+        # 7. Health check on proposed stocks only
         proposed_health: list[dict] = []
         try:
             from src.core.health_check import run_health_check
@@ -285,21 +461,73 @@ def run_what_if_simulation(
         except ImportError:
             pass
 
-        # 7. FX rates and required cash
+        # 8. FX rates and required cash
         fx_rates = before_snapshot.get("fx_rates", {"JPY": 1.0})
         required_cash = _compute_required_cash(proposed, fx_rates)
 
-        # 8. Judgment
+        # 9. (KIK-451) Proceeds and removed-stock health check
+        removed_health: list[dict] = []
+        proceeds = 0.0
+        enriched_removals: list[dict] | None = None
+
+        if removals:
+            snapshot_positions = before_snapshot.get("positions", [])
+            proceeds = _compute_proceeds(removals, snapshot_positions)
+
+            # Enrich each removal with its per-stock proceeds for the formatter
+            pos_map = {p["symbol"].upper(): p for p in snapshot_positions}
+            enriched_removals = []
+            for rem in removals:
+                rem_copy = dict(rem)
+                pos = pos_map.get(rem["symbol"].upper(), {})
+                held = pos.get("shares", 0)
+                if held > 0:
+                    ratio = min(rem["shares"] / held, 1.0)
+                    rem_copy["proceeds_jpy"] = ratio * pos.get("evaluation_jpy", 0.0)
+                else:
+                    rem_copy["proceeds_jpy"] = 0.0
+                enriched_removals.append(rem_copy)
+
+            # Health check for removed stocks via temporary CSV
+            removal_portfolio = [
+                p for p in current
+                if p["symbol"].upper() in {r["symbol"].upper() for r in removals}
+            ]
+            if removal_portfolio:
+                rem_fd, rem_path = tempfile.mkstemp(
+                    suffix=".csv", prefix="whatif_rem_"
+                )
+                os.close(rem_fd)
+                try:
+                    save_portfolio(removal_portfolio, rem_path)
+                    try:
+                        from src.core.health_check import run_health_check
+
+                        rem_health_data = run_health_check(rem_path, client)
+                        removal_symbols = {
+                            r["symbol"].upper() for r in removals
+                        }
+                        for pos in rem_health_data.get("positions", []):
+                            if pos.get("symbol", "").upper() in removal_symbols:
+                                removed_health.append(pos)
+                    except ImportError:
+                        pass
+                finally:
+                    if os.path.exists(rem_path):
+                        os.remove(rem_path)
+
+        # 10. Judgment
         judgment = _compute_judgment(
-            before_metrics, after_metrics, proposed_health
+            before_metrics, after_metrics, proposed_health,
+            removed_health=removed_health if removals else None,
         )
 
     finally:
-        # 9. Cleanup temp CSV
+        # 11. Cleanup main temp CSV
         if os.path.exists(temp_path):
             os.remove(temp_path)
 
-    return {
+    result: dict = {
         "proposed": proposed,
         "before": before_metrics,
         "after": after_metrics,
@@ -307,3 +535,11 @@ def run_what_if_simulation(
         "required_cash_jpy": required_cash,
         "judgment": judgment,
     }
+
+    if removals is not None:
+        result["removals"] = enriched_removals or []
+        result["removed_health"] = removed_health
+        result["proceeds_jpy"] = proceeds
+        result["net_cash_jpy"] = proceeds - required_cash
+
+    return result

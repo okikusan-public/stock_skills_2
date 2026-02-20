@@ -119,6 +119,15 @@
 - 「〇〇を追加したらどうなる？」「〇〇を買ったらPFどう変わる？」「影響は？」 → `what-if`
 - 形式: `what-if --add "SYMBOL:SHARES:PRICE,..."` 例: `what-if --add "7203.T:100:2850,AAPL:10:250"`
 
+**KIK-451 関連（スワップシミュレーション）**:
+- 「〇〇を売って△△を買ったら？」「入れ替えたらどうなる？」「乗り換えシミュレーション」 → `what-if --remove --add`
+- 「〇〇を売ったら資金はいくら？」「売却シミュレーション」「〇〇を手放したらPFがどう変わる？」 → `what-if --remove`
+- 形式:
+  - スワップ: `what-if --remove "SYMBOL:SHARES,..." --add "SYMBOL:SHARES:PRICE,..."`
+  - 売却のみ: `what-if --remove "SYMBOL:SHARES,..."`（価格不要・時価で試算）
+- 例: `what-if --remove "7203.T:100" --add "9984.T:50:7500"`
+- スワップ出力: 売却代金試算 / 資金収支（差額） / 売却銘柄ヘルスチェック / 「このスワップは推奨」等の判定
+
 **KIK-374 関連**:
 - 「ゴールデンクロス」「デッドクロス」「クロス」 → `health`（クロスイベント検出で表示）
 
@@ -304,6 +313,8 @@
 | `/screen-stocks shareholder-return` 結果表示後 | 「安定してるやつだけ見たい」 | → 結果から ✅/📈 のみフィルタ |
 | `/stock-portfolio buy` で購入記録 | 「メモしておいて」「投資理由を記録」 | → `/investment-note save --symbol <銘柄> --type thesis --content ...` |
 | `/stock-portfolio health` で EXIT 判定 | 「学びを記録」「反省メモ」 | → `/investment-note save --symbol <銘柄> --type lesson --content ...` |
+| `/stock-portfolio health` で EXIT 判定 | 「売って乗り換えたい」「代替を買ったらどうなる？」 | → `what-if --remove "<EXIT銘柄>:SHARES" --add "<代替>:SHARES:PRICE"` |
+| `what-if --remove` 実行後 | 「代替を探して」「乗り換え先を調べて」 | → `/screen-stocks`（同セクターで） |
 | `/graph-query` で過去レポート表示 | 「最新も見たい」「今はどう？」 | → `/stock-report <銘柄>` |
 | `/investment-note list` でメモ表示 | 「この銘柄を調べて」 | → `/stock-report <銘柄>` |
 | `/stock-report` でレポート生成 | 「懸念をメモしておいて」 | → `/investment-note save --symbol <銘柄> --type concern --content ...` |

@@ -123,21 +123,33 @@ python3 .../run_portfolio.py forecast
 3. 期待リターン TOP 3 / BOTTOM 3 ランキング
 4. 銘柄別詳細（アナリスト目標/Forward PER/ニュース件数/Xセンチメント/3シナリオ）
 
-### what-if -- What-Ifシミュレーション
+### what-if -- What-Ifシミュレーション (KIK-376 / KIK-451)
 
-指定した銘柄を追加した場合のポートフォリオへの影響をBefore/After比較で表示する。
+銘柄の追加・売却・スワップをシミュレーションし、ポートフォリオへの影響をBefore/After比較で表示する。
 
 ```bash
-python3 .../run_portfolio.py what-if --add "SYMBOL:SHARES:PRICE[,SYMBOL:SHARES:PRICE,...]"
+# 追加のみ（従来）
+python3 .../run_portfolio.py what-if --add "SYMBOL:SHARES:PRICE[,...]"
+
+# スワップ（売却して購入）(KIK-451)
+python3 .../run_portfolio.py what-if --remove "SYMBOL:SHARES[,...]" --add "SYMBOL:SHARES:PRICE[,...]"
+
+# 売却のみシミュレーション (KIK-451)
+python3 .../run_portfolio.py what-if --remove "SYMBOL:SHARES[,...]"
 ```
 
 CLIオプション:
-- `--add` : 追加銘柄リスト（必須）。形式: `SYMBOL:SHARES:PRICE` をカンマ区切り
+- `--add` : 追加銘柄リスト（任意）。形式: `SYMBOL:SHARES:PRICE` をカンマ区切り
+- `--remove` : 売却銘柄リスト（任意）。形式: `SYMBOL:SHARES` をカンマ区切り（価格不要・時価で試算）
+- `--add` と `--remove` のどちらか一方は必須
 
 **出力:**
 - Before/After のセクターHHI・地域HHI・通貨HHI比較
 - 追加銘柄の基本情報（PER/PBR/配当利回り/ROE）
-- 集中度の変化と改善/悪化の判定
+- **[スワップ時] 売却銘柄テーブル**（銘柄・株数・売却代金試算）
+- **[スワップ時] 資金収支**（購入必要資金 / 売却代金試算 / 差額）
+- **[スワップ時] 売却銘柄ヘルスチェック**（売却対象のアラート状況）
+- 判定ラベル: 推奨 / 注意して検討 / 非推奨（スワップ時は「このスワップは推奨」等）
 
 ### backtest -- バックテスト
 
@@ -217,6 +229,10 @@ python3 .../run_portfolio.py list
 - Before/After のHHI比較（セクター/地域/通貨）
 - 追加銘柄のファンダメンタルズ
 - 集中度変化の判定
+- **[スワップ時]** 売却銘柄テーブル（売却代金試算）
+- **[スワップ時]** 資金収支（購入必要資金 / 売却代金 / 差額）
+- **[スワップ時]** 売却銘柄ヘルスチェック
+- **[スワップ時]** 「このスワップは推奨 / 注意して検討 / 非推奨」
 
 ### backtest の出力項目
 - スクリーニング日別リターン
@@ -264,8 +280,14 @@ python3 .../run_portfolio.py rebalance
 python3 .../run_portfolio.py rebalance --strategy defensive
 python3 .../run_portfolio.py rebalance --reduce-sector Technology --additional-cash 1000000
 
-# What-Ifシミュレーション
+# What-Ifシミュレーション（追加のみ）
 python3 .../run_portfolio.py what-if --add "7203.T:100:2850,AAPL:10:250"
+
+# What-Ifシミュレーション（スワップ: 7203.T売却 → 9984.T購入）(KIK-451)
+python3 .../run_portfolio.py what-if --remove "7203.T:100" --add "9984.T:50:7500"
+
+# What-Ifシミュレーション（純売却）(KIK-451)
+python3 .../run_portfolio.py what-if --remove "7203.T:50"
 
 # バックテスト
 python3 .../run_portfolio.py backtest --preset alpha --region jp --days 90

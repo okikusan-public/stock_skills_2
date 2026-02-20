@@ -17,6 +17,12 @@ _JUDGMENT_LABEL = {
     "not_recommended": "この追加は非推奨",
 }
 
+_JUDGMENT_LABEL_SWAP = {
+    "recommend": "このスワップは推奨",
+    "caution": "注意して検討",
+    "not_recommended": "このスワップは非推奨",
+}
+
 
 def format_simulation(result) -> str:
     """Format compound interest simulation results as Markdown.
@@ -201,6 +207,26 @@ def format_simulation(result) -> str:
     return "\n".join(lines)
 
 
+def _fmt_health_section(health_list: list[dict], title: str) -> list[str]:
+    """Format a health check section (shared by proposed and removed stocks)."""
+    lines: list[str] = [f"### {title}", ""]
+    for ph in health_list:
+        symbol = ph.get("symbol", "-")
+        alert = ph.get("alert", {})
+        level = alert.get("level", "none")
+        label = alert.get("label", "なし")
+        if level == "none":
+            lines.append(f"✅ {symbol}: OK")
+        elif level == "early_warning":
+            lines.append(f"⚡ {symbol}: {label}")
+        elif level == "caution":
+            lines.append(f"⚠️ {symbol}: {label}")
+        elif level == "exit":
+            lines.append(f"🚨 {symbol}: {label}")
+    lines.append("")
+    return lines
+
+
 def format_what_if(result: dict) -> str:
     """Format What-If simulation result as Markdown.
 
@@ -208,6 +234,8 @@ def format_what_if(result: dict) -> str:
     ----------
     result : dict
         Output from portfolio_simulation.run_what_if_simulation().
+        KIK-451: Supports optional swap fields: removals, removed_health,
+        proceeds_jpy, net_cash_jpy.
 
     Returns
     -------
@@ -217,49 +245,81 @@ def format_what_if(result: dict) -> str:
     lines: list[str] = []
 
     proposed = result.get("proposed", [])
+    removals = result.get("removals", [])    # KIK-451
     before = result.get("before", {})
     after = result.get("after", {})
     proposed_health = result.get("proposed_health", [])
+    removed_health = result.get("removed_health", [])    # KIK-451
     required_cash = result.get("required_cash_jpy", 0)
+    proceeds = result.get("proceeds_jpy")    # KIK-451 (None when not a swap)
+    net_cash = result.get("net_cash_jpy")    # KIK-451
     judgment = result.get("judgment", {})
 
-    lines.append("## What-If \u30b7\u30df\u30e5\u30ec\u30fc\u30b7\u30e7\u30f3")
+    is_swap = bool(removals)
+
+    lines.append("## What-If シミュレーション")
     lines.append("")
+
+    # --- (KIK-451) Removed stocks table ---
+    if removals:
+        lines.append("### 売却銘柄")
+        lines.append("")
+        lines.append("| 銘柄 | 株数 | 売却代金（試算） |")
+        lines.append("|:-----|-----:|----------------:|")
+        for rem in removals:
+            symbol = rem.get("symbol", "-")
+            shares = rem.get("shares", 0)
+            rem_proceeds = rem.get("proceeds_jpy", 0.0)
+            lines.append(
+                f"| {symbol} | {shares:,} | {_fmt_jpy(rem_proceeds)} |"
+            )
+        lines.append("")
+        lines.append(f"売却代金合計: {_fmt_jpy(proceeds or 0.0)}")
+        lines.append("")
 
     # --- Proposed stocks ---
-    lines.append("### \u8ffd\u52a0\u9298\u67c4")
-    lines.append("")
-    lines.append(
-        "| \u9298\u67c4 | \u682a\u6570 | \u5358\u4fa1 | \u901a\u8ca8 "
-        "| \u91d1\u984d |"
-    )
-    lines.append("|:-----|-----:|------:|:-----|------:|")
+    if proposed:
+        lines.append("### 追加銘柄")
+        lines.append("")
+        lines.append("| 銘柄 | 株数 | 単価 | 通貨 | 金額 |")
+        lines.append("|:-----|-----:|------:|:-----|------:|")
 
-    for prop in proposed:
-        symbol = prop.get("symbol", "-")
-        shares = prop.get("shares", 0)
-        price = prop.get("cost_price", 0)
-        currency = prop.get("cost_currency", "JPY")
-        amount = shares * price
-        price_str = _fmt_currency_value(price, currency)
-        amount_str = _fmt_currency_value(amount, currency)
-        lines.append(
-            f"| {symbol} | {shares:,} | {price_str} "
-            f"| {currency} | {amount_str} |"
-        )
+        for prop in proposed:
+            symbol = prop.get("symbol", "-")
+            shares = prop.get("shares", 0)
+            price = prop.get("cost_price", 0)
+            currency = prop.get("cost_currency", "JPY")
+            amount = shares * price
+            price_str = _fmt_currency_value(price, currency)
+            amount_str = _fmt_currency_value(amount, currency)
+            lines.append(
+                f"| {symbol} | {shares:,} | {price_str} "
+                f"| {currency} | {amount_str} |"
+            )
 
-    lines.append("")
-    lines.append(
-        f"\u5fc5\u8981\u8cc7\u91d1\u5408\u8a08: {_fmt_jpy(required_cash)}"
-    )
-    lines.append("")
+        lines.append("")
+        lines.append(f"必要資金合計: {_fmt_jpy(required_cash)}")
+        lines.append("")
+
+    # --- (KIK-451) Cash balance for swap mode ---
+    if is_swap:
+        lines.append("### 資金収支")
+        lines.append("")
+        lines.append("| 項目 | 金額 |")
+        lines.append("|:-----|-----:|")
+        if proposed:
+            lines.append(f"| 購入必要資金 | {_fmt_jpy(required_cash)} |")
+        lines.append(f"| 売却代金（試算） | {_fmt_jpy(proceeds or 0.0)} |")
+        if net_cash is not None and proposed:
+            suffix = "（余剰資金）" if net_cash >= 0 else "（追加資金が必要）"
+            lines.append(f"| 差額 | {_fmt_jpy(net_cash)}{suffix} |")
+        lines.append("")
 
     # --- Portfolio change comparison ---
-    lines.append("### \u30dd\u30fc\u30c8\u30d5\u30a9\u30ea\u30aa\u5909\u5316")
+    after_label = "スワップ後" if is_swap else "追加後"
+    lines.append("### ポートフォリオ変化")
     lines.append("")
-    lines.append(
-        "| \u6307\u6a19 | \u73fe\u5728 | \u8ffd\u52a0\u5f8c | \u5909\u5316 |"
-    )
+    lines.append(f"| 指標 | 現在 | {after_label} | 変化 |")
     lines.append("|:-----|------:|------:|:------|")
 
     # Total value
@@ -271,20 +331,19 @@ def format_what_if(result: dict) -> str:
     else:
         change_str = "-"
     lines.append(
-        f"| \u7dcf\u8a55\u4fa1\u984d | {_fmt_jpy(bv)} "
-        f"| {_fmt_jpy(av)} | {change_str} |"
+        f"| 総評価額 | {_fmt_jpy(bv)} | {_fmt_jpy(av)} | {change_str} |"
     )
 
     # Sector HHI
     b_shhi = before.get("sector_hhi", 0)
     a_shhi = after.get("sector_hhi", 0)
     hhi_indicator = (
-        "\u2705 \u6539\u5584" if a_shhi < b_shhi
-        else "\u26a0\ufe0f \u60aa\u5316" if a_shhi > b_shhi
-        else "\u2194\ufe0f \u5909\u5316\u306a\u3057"
+        "✅ 改善" if a_shhi < b_shhi
+        else "⚠️ 悪化" if a_shhi > b_shhi
+        else "↔️ 変化なし"
     )
     lines.append(
-        f"| \u30bb\u30af\u30bf\u30fcHHI | {_fmt_float(b_shhi, 2)} "
+        f"| セクターHHI | {_fmt_float(b_shhi, 2)} "
         f"| {_fmt_float(a_shhi, 2)} | {hhi_indicator} |"
     )
 
@@ -292,12 +351,12 @@ def format_what_if(result: dict) -> str:
     b_rhhi = before.get("region_hhi", 0)
     a_rhhi = after.get("region_hhi", 0)
     rhhi_indicator = (
-        "\u2705 \u6539\u5584" if a_rhhi < b_rhhi
-        else "\u26a0\ufe0f \u60aa\u5316" if a_rhhi > b_rhhi
-        else "\u2194\ufe0f \u5909\u5316\u306a\u3057"
+        "✅ 改善" if a_rhhi < b_rhhi
+        else "⚠️ 悪化" if a_rhhi > b_rhhi
+        else "↔️ 変化なし"
     )
     lines.append(
-        f"| \u5730\u57dfHHI | {_fmt_float(b_rhhi, 2)} "
+        f"| 地域HHI | {_fmt_float(b_rhhi, 2)} "
         f"| {_fmt_float(a_rhhi, 2)} | {rhhi_indicator} |"
     )
 
@@ -307,12 +366,12 @@ def format_what_if(result: dict) -> str:
     if b_ret is not None and a_ret is not None:
         diff_pp = (a_ret - b_ret) * 100
         ret_indicator = (
-            f"\u2705 +{diff_pp:.1f}pp" if diff_pp > 0
-            else f"\u26a0\ufe0f {diff_pp:.1f}pp" if diff_pp < 0
-            else "\u2194\ufe0f 0pp"
+            f"✅ +{diff_pp:.1f}pp" if diff_pp > 0
+            else f"⚠️ {diff_pp:.1f}pp" if diff_pp < 0
+            else "↔️ 0pp"
         )
         lines.append(
-            f"| \u671f\u5f85\u30ea\u30bf\u30fc\u30f3(\u30d9\u30fc\u30b9) "
+            f"| 期待リターン(ベース) "
             f"| {_fmt_pct_sign(b_ret)} "
             f"| {_fmt_pct_sign(a_ret)} | {ret_indicator} |"
         )
@@ -320,31 +379,21 @@ def format_what_if(result: dict) -> str:
 
     # --- Proposed stock health ---
     if proposed_health:
-        lines.append(
-            "### \u63d0\u6848\u9298\u67c4\u30d8\u30eb\u30b9\u30c1\u30a7\u30c3\u30af"
-        )
-        lines.append("")
-        for ph in proposed_health:
-            symbol = ph.get("symbol", "-")
-            alert = ph.get("alert", {})
-            level = alert.get("level", "none")
-            label = alert.get("label", "\u306a\u3057")
-            if level == "none":
-                lines.append(f"\u2705 {symbol}: OK")
-            elif level == "early_warning":
-                lines.append(f"\u26a1 {symbol}: {label}")
-            elif level == "caution":
-                lines.append(f"\u26a0\ufe0f {symbol}: {label}")
-            elif level == "exit":
-                lines.append(f"\U0001f6a8 {symbol}: {label}")
-        lines.append("")
+        lines += _fmt_health_section(proposed_health, "提案銘柄ヘルスチェック")
+
+    # --- (KIK-451) Removed stock health ---
+    if removed_health:
+        lines += _fmt_health_section(removed_health, "売却銘柄ヘルスチェック")
 
     # --- Judgment ---
-    lines.append("### \u7dcf\u5408\u5224\u5b9a")
+    lines.append("### 総合判定")
     lines.append("")
     rec = judgment.get("recommendation", "caution")
     emoji = _JUDGMENT_EMOJI.get(rec, "")
-    label = _JUDGMENT_LABEL.get(rec, rec)
+    if is_swap and proposed:
+        label = _JUDGMENT_LABEL_SWAP.get(rec, rec)
+    else:
+        label = _JUDGMENT_LABEL.get(rec, rec)
     lines.append(f"{emoji} **{label}**")
     for reason in judgment.get("reasons", []):
         lines.append(f"- {reason}")
