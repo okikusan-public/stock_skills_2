@@ -1,4 +1,4 @@
-"""GrowthScreener: pure growth (no value constraint) screening."""
+"""GrowthScreener: growth-oriented screening (growth/high-growth/small-cap-growth)."""
 
 from typing import Optional
 
@@ -7,22 +7,44 @@ from src.core.screening.query_screener import QueryScreener
 
 
 class GrowthScreener:
-    """Screen stocks for pure growth (no value constraint).
+    """Screen stocks for growth characteristics.
 
     Two-step pipeline:
-      Step 1: EquityQuery for growth filtering (ROE, revenue growth, EPS growth, market cap)
-      Step 2: Fetch stock detail for EPS growth rate, sort by EPS growth descending
+      Step 1: EquityQuery for growth filtering (criteria from preset)
+      Step 2: Fetch stock detail for EPS/revenue growth, sort by sort_by field
+
+    Supports three modes via constructor parameters:
+      - growth (default): EPS growth > 0 required, sorted by eps_growth
+      - high-growth: profit not required, sorted by revenue_growth
+      - small-cap-growth: profit not required, sorted by revenue_growth,
+        with market cap ceiling via criteria_overrides
     """
 
-    def __init__(self, yahoo_client):
+    def __init__(
+        self,
+        yahoo_client,
+        preset: str = "growth",
+        sort_by: str = "eps_growth",
+        require_positive_eps: bool = True,
+    ):
         """Initialise the screener.
 
         Parameters
         ----------
         yahoo_client : module or object
             Must expose ``screen_stocks()`` and ``get_stock_detail()``.
+        preset : str
+            Preset name to load from screening_presets.yaml.
+        sort_by : str
+            Field to sort results by ('eps_growth' or 'revenue_growth').
+        require_positive_eps : bool
+            When True, filter out stocks with eps_growth <= 0.
+            Set to False for high-growth/small-cap-growth (profit not required).
         """
         self.yahoo_client = yahoo_client
+        self.preset = preset
+        self.sort_by = sort_by
+        self.require_positive_eps = require_positive_eps
 
     def screen(
         self,
@@ -30,6 +52,7 @@ class GrowthScreener:
         top_n: int = 20,
         sector: Optional[str] = None,
         theme: Optional[str] = None,
+        criteria_overrides: Optional[dict] = None,
     ) -> list[dict]:
         """Run the two-step growth screening pipeline.
 
@@ -43,13 +66,17 @@ class GrowthScreener:
             Sector filter (e.g. 'Technology').
         theme : str, optional
             Theme filter key (e.g. 'ai', 'ev', 'defense').
+        criteria_overrides : dict, optional
+            Override preset criteria (e.g. max_market_cap for small-cap-growth).
 
         Returns
         -------
         list[dict]
-            Screened stocks sorted by eps_growth descending.
+            Screened stocks sorted by self.sort_by descending.
         """
-        criteria = load_preset("growth")
+        criteria = load_preset(self.preset)
+        if criteria_overrides:
+            criteria.update(criteria_overrides)
 
         # Step 1: EquityQuery for growth-filtered stocks (sorted by market cap)
         query = build_query(criteria, region=region, sector=sector, theme=theme)
@@ -85,8 +112,9 @@ class GrowthScreener:
                 continue
 
             eps_growth = detail.get("eps_growth")
-            if eps_growth is None or eps_growth <= 0:
-                continue
+            if self.require_positive_eps:
+                if eps_growth is None or eps_growth <= 0:
+                    continue
 
             rev_growth = stock.get("revenue_growth") or detail.get("revenue_growth")
 
@@ -104,6 +132,6 @@ class GrowthScreener:
                 "market_cap": stock.get("market_cap"),
             })
 
-        # Sort by EPS growth descending
-        results.sort(key=lambda r: r.get("eps_growth", 0), reverse=True)
+        # Sort by configured field descending
+        results.sort(key=lambda r: r.get(self.sort_by, 0) or 0, reverse=True)
         return results[:top_n]

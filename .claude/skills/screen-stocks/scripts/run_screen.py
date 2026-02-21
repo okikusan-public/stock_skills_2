@@ -283,26 +283,62 @@ def run_query_mode(args):
             print()
         return
 
-    # growth preset uses GrowthScreener
-    if args.preset == "growth":
-        screener = GrowthScreener(yahoo_client)
+    # growth / high-growth / small-cap-growth use GrowthScreener
+    if args.preset in ("growth", "high-growth", "small-cap-growth"):
+        if args.preset == "growth":
+            screener = GrowthScreener(yahoo_client)
+            preset_label = "純成長株"
+            step1_msg = "Step 1: 成長条件で絞り込み中 (EquityQuery)..."
+            step2_tmpl = "Step 2: {n}銘柄のEPS成長率を取得・ソート完了"
+        elif args.preset == "high-growth":
+            screener = GrowthScreener(
+                yahoo_client, preset="high-growth",
+                sort_by="revenue_growth", require_positive_eps=False,
+            )
+            preset_label = "高成長株"
+            step1_msg = "Step 1: 高成長条件で絞り込み中 (EquityQuery, 利益不問)..."
+            step2_tmpl = "Step 2: {n}銘柄の売上成長率を取得・ソート完了"
+        else:  # small-cap-growth
+            screener = GrowthScreener(
+                yahoo_client, preset="small-cap-growth",
+                sort_by="revenue_growth", require_positive_eps=False,
+            )
+            preset_label = "小型急成長株"
+            step1_msg = "Step 1: 小型急成長条件で絞り込み中 (EquityQuery, 利益不問)..."
+            step2_tmpl = "Step 2: {n}銘柄の売上成長率を取得・ソート完了"
+
         for region_code in regions:
             region_name = REGION_NAMES.get(region_code, region_code.upper())
             sector_label = f" [{args.sector}]" if args.sector else ""
             theme_label = f" [{args.theme}]" if args.theme else ""
-            print(f"\n## {region_name} - 純成長株{sector_label}{theme_label} スクリーニング結果\n")
-            print("Step 1: 成長条件で絞り込み中 (EquityQuery)...")
-            results = screener.screen(region=region_code, top_n=args.top, sector=args.sector, theme=args.theme)
+            print(f"\n## {region_name} - {preset_label}{sector_label}{theme_label} スクリーニング結果\n")
+            print(step1_msg)
+
+            # Region-aware market cap override for small-cap-growth (KIK-437)
+            overrides = None
+            if args.preset == "small-cap-growth":
+                if region_code in _SMALL_CAP_MARKET_CAP:
+                    overrides = {"max_market_cap": _SMALL_CAP_MARKET_CAP[region_code]}
+                else:
+                    print(f"Warning: {region_code} の小型株時価総額閾値が未定義です。YAMLデフォルト値を使用します。", file=sys.stderr)
+
+            results = screener.screen(
+                region=region_code, top_n=args.top,
+                sector=args.sector, theme=args.theme,
+                criteria_overrides=overrides,
+            )
             results, excluded = _annotate(results)
-            print(f"Step 2: {len(results)}銘柄のEPS成長率を取得・ソート完了\n")
+            print(f"{step2_tmpl.format(n=len(results))}\n")
             if excluded:
                 print(f"※ 直近売却済み {excluded}銘柄を除外\n")
+            if args.preset == "small-cap-growth":
+                print("⚠️ 小型株は流動性リスクが高く、スプレッドが広い場合があります。売買時は板の厚さを確認してください。\n")
             print(format_growth_markdown(results))
             _print_recurring_picks(results)
             _print_graphrag_context(results)
             if HAS_HISTORY and results:
                 try:
-                    save_screening(preset="growth", region=region_code, results=results, sector=args.sector)
+                    save_screening(preset=args.preset, region=region_code, results=results, sector=args.sector)
                 except Exception as e:
                     print(f"Warning: 履歴保存失敗: {e}", file=sys.stderr)
             print()
@@ -338,13 +374,7 @@ def run_query_mode(args):
         sector_label = f" [{args.sector}]" if args.sector else ""
         theme_label = f" [{args.theme}]" if args.theme else ""
 
-        # Region-aware market cap override for small-cap-growth (KIK-437)
         overrides = None
-        if args.preset == "small-cap-growth":
-            if region_code in _SMALL_CAP_MARKET_CAP:
-                overrides = {"max_market_cap": _SMALL_CAP_MARKET_CAP[region_code]}
-            else:
-                print(f"Warning: {region_code} の小型株時価総額閾値が未定義です。YAMLデフォルト値を使用します。", file=sys.stderr)
 
         if args.with_pullback:
             results = screener.screen(

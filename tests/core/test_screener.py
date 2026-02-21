@@ -433,6 +433,159 @@ class TestGrowthScreener:
 
 
 # ===================================================================
+# KIK-432/437 fix: GrowthScreener with high-growth / small-cap-growth
+# ===================================================================
+
+
+class TestHighGrowthScreener:
+    """Tests for GrowthScreener with high-growth / small-cap-growth presets."""
+
+    def _make_raw_quote(self, symbol, short_name="Test", per=None,
+                        revenue_growth=0.30, market_cap=500_000_000):
+        return {
+            "symbol": symbol,
+            "shortName": short_name,
+            "sector": "Technology",
+            "regularMarketPrice": 1000.0,
+            "marketCap": market_cap,
+            "trailingPE": per,
+            "forwardPE": per * 0.9 if per else None,
+            "priceToBook": 5.0,
+            "returnOnEquity": 0.05,
+            "dividendYield": 0.0,
+            "revenueGrowth": revenue_growth,
+        }
+
+    def _make_detail(self, eps_growth=None, revenue_growth=0.30):
+        return {
+            "eps_growth": eps_growth,
+            "revenue_growth": revenue_growth,
+        }
+
+    def test_includes_unprofitable_companies(self):
+        """high-growth should NOT filter out stocks with no eps_growth."""
+        quotes = [
+            self._make_raw_quote("PROFIT.T", per=20.0, revenue_growth=0.40),
+            self._make_raw_quote("NOPROFIT.T", per=None, revenue_growth=0.60),
+        ]
+        details = {
+            "PROFIT.T": self._make_detail(eps_growth=0.10, revenue_growth=0.40),
+            "NOPROFIT.T": self._make_detail(eps_growth=None, revenue_growth=0.60),
+        }
+
+        class MockClient:
+            def screen_stocks(self, *a, **kw):
+                return quotes
+            def get_stock_detail(self, sym):
+                return details.get(sym)
+
+        screener = GrowthScreener(
+            MockClient(), preset="high-growth",
+            sort_by="revenue_growth", require_positive_eps=False,
+        )
+        results = screener.screen(region="jp", top_n=10)
+
+        assert len(results) == 2
+        assert results[0]["symbol"] == "NOPROFIT.T"
+
+    def test_sorted_by_revenue_growth(self):
+        """Results should be sorted by revenue_growth descending."""
+        quotes = [
+            self._make_raw_quote("LOW.T", revenue_growth=0.20),
+            self._make_raw_quote("HIGH.T", revenue_growth=0.50),
+            self._make_raw_quote("MID.T", revenue_growth=0.35),
+        ]
+        details = {
+            "LOW.T": self._make_detail(revenue_growth=0.20),
+            "HIGH.T": self._make_detail(revenue_growth=0.50),
+            "MID.T": self._make_detail(revenue_growth=0.35),
+        }
+
+        class MockClient:
+            def screen_stocks(self, *a, **kw):
+                return quotes
+            def get_stock_detail(self, sym):
+                return details.get(sym)
+
+        screener = GrowthScreener(
+            MockClient(), preset="high-growth",
+            sort_by="revenue_growth", require_positive_eps=False,
+        )
+        results = screener.screen(region="jp", top_n=10)
+
+        assert len(results) == 3
+        assert results[0]["symbol"] == "HIGH.T"
+        assert results[1]["symbol"] == "MID.T"
+        assert results[2]["symbol"] == "LOW.T"
+
+    def test_negative_eps_growth_included(self):
+        """Stocks with negative eps_growth should be included."""
+        quotes = [self._make_raw_quote("NEG.T")]
+        details = {
+            "NEG.T": self._make_detail(eps_growth=-0.30, revenue_growth=0.40),
+        }
+
+        class MockClient:
+            def screen_stocks(self, *a, **kw):
+                return quotes
+            def get_stock_detail(self, sym):
+                return details.get(sym)
+
+        screener = GrowthScreener(
+            MockClient(), preset="high-growth",
+            sort_by="revenue_growth", require_positive_eps=False,
+        )
+        results = screener.screen(region="jp", top_n=10)
+
+        assert len(results) == 1
+        assert results[0]["eps_growth"] == -0.30
+
+    def test_criteria_overrides_applied(self):
+        """criteria_overrides should be passed to build_query via load_preset."""
+        captured = {}
+
+        class MockClient:
+            def screen_stocks(self, query, **kw):
+                captured["called"] = True
+                return []
+            def get_stock_detail(self, sym):
+                return None
+
+        screener = GrowthScreener(
+            MockClient(), preset="small-cap-growth",
+            sort_by="revenue_growth", require_positive_eps=False,
+        )
+        screener.screen(
+            region="jp", top_n=10,
+            criteria_overrides={"max_market_cap": 999},
+        )
+        assert captured.get("called") is True
+
+    def test_backward_compatible_growth_preset(self):
+        """Default GrowthScreener() should still filter eps_growth <= 0."""
+        quotes = [
+            self._make_raw_quote("GOOD.T", per=15.0, revenue_growth=0.10),
+            self._make_raw_quote("BAD.T", per=10.0, revenue_growth=0.30),
+        ]
+        details = {
+            "GOOD.T": self._make_detail(eps_growth=0.30, revenue_growth=0.10),
+            "BAD.T": self._make_detail(eps_growth=-0.10, revenue_growth=0.30),
+        }
+
+        class MockClient:
+            def screen_stocks(self, *a, **kw):
+                return quotes
+            def get_stock_detail(self, sym):
+                return details.get(sym)
+
+        screener = GrowthScreener(MockClient())
+        results = screener.screen(region="jp", top_n=10)
+
+        assert len(results) == 1
+        assert results[0]["symbol"] == "GOOD.T"
+
+
+# ===================================================================
 # KIK-437: QueryScreener.screen() criteria_overrides
 # ===================================================================
 

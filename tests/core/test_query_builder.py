@@ -338,10 +338,10 @@ class TestLoadThemes:
                     "renewable-energy", "fintech", "defense", "healthcare"}
         assert expected.issubset(set(themes.keys()))
 
-    def test_defense_single_industry(self):
-        """defense theme has exactly one industry."""
+    def test_defense_industries(self):
+        """defense theme has two industries (Aerospace & Defense + Specialty Industrial Machinery)."""
         themes = load_themes()
-        assert len(themes["defense"]["industries"]) == 1
+        assert len(themes["defense"]["industries"]) == 2
 
     def test_missing_file_returns_empty_dict(self, monkeypatch, tmp_path):
         """load_themes() should return {} when themes.yaml does not exist."""
@@ -369,8 +369,8 @@ class TestBuildThemeCondition:
         with pytest.raises(ValueError, match="未定義"):
             _build_theme_condition("unknown-theme", themes)
 
-    def test_defense_single_industry(self):
-        """Single-industry theme (defense) should still produce EquityQuery."""
+    def test_defense_multi_industry(self):
+        """Multi-industry theme (defense) should produce EquityQuery."""
         themes = load_themes()
         cond = _build_theme_condition("defense", themes)
         assert isinstance(cond, EquityQuery)
