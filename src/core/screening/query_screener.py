@@ -109,6 +109,7 @@ class QueryScreener:
         preset: Optional[str] = None,
         exchange: Optional[str] = None,
         sector: Optional[str] = None,
+        theme: Optional[str] = None,
         top_n: int = 20,
         sort_field: str = "intradaymarketcap",
         sort_asc: bool = False,
@@ -132,6 +133,9 @@ class QueryScreener:
             alone determines the scope.
         sector : str, optional
             Sector filter (e.g. 'Technology', 'Financial Services').
+        theme : str, optional
+            Theme filter key (e.g. 'ai', 'ev', 'defense'). Narrows
+            results to industries defined in config/themes.yaml.
         top_n : int
             Maximum number of results to return.
         sort_field : str
@@ -161,7 +165,7 @@ class QueryScreener:
                 criteria = {}
 
         # Build the EquityQuery
-        query = build_query(criteria, region=region, exchange=exchange, sector=sector)
+        query = build_query(criteria, region=region, exchange=exchange, sector=sector, theme=theme)
 
         # Fetch more than needed to allow scoring to select the best.
         # Pullback mode needs a higher multiplier since many stocks fail the technical filter.

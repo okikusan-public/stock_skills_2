@@ -273,9 +273,10 @@ def run_query_mode(args):
         for region_code in regions:
             region_name = REGION_NAMES.get(region_code, region_code.upper())
             sector_label = f" [{args.sector}]" if args.sector else ""
-            print(f"\n## {region_name} - 純成長株{sector_label} スクリーニング結果\n")
+            theme_label = f" [{args.theme}]" if args.theme else ""
+            print(f"\n## {region_name} - 純成長株{sector_label}{theme_label} スクリーニング結果\n")
             print("Step 1: 成長条件で絞り込み中 (EquityQuery)...")
-            results = screener.screen(region=region_code, top_n=args.top, sector=args.sector)
+            results = screener.screen(region=region_code, top_n=args.top, sector=args.sector, theme=args.theme)
             results, excluded = _annotate(results)
             print(f"Step 2: {len(results)}銘柄のEPS成長率を取得・ソート完了\n")
             if excluded:
@@ -319,18 +320,20 @@ def run_query_mode(args):
     for region_code in regions:
         region_name = REGION_NAMES.get(region_code, region_code.upper())
         sector_label = f" [{args.sector}]" if args.sector else ""
+        theme_label = f" [{args.theme}]" if args.theme else ""
 
         if args.with_pullback:
             results = screener.screen(
                 region=region_code,
                 preset=args.preset,
                 sector=args.sector,
+                theme=args.theme,
                 top_n=args.top,
                 with_pullback=True,
             )
             results, excluded = _annotate(results)
             pullback_label = " + 押し目フィルタ"
-            print(f"\n## {region_name} - {args.preset}{sector_label}{pullback_label} スクリーニング結果 (EquityQuery)\n")
+            print(f"\n## {region_name} - {args.preset}{sector_label}{theme_label}{pullback_label} スクリーニング結果 (EquityQuery)\n")
             if excluded:
                 print(f"※ 直近売却済み {excluded}銘柄を除外\n")
             print(format_pullback_markdown(results))
@@ -346,10 +349,11 @@ def run_query_mode(args):
                 region=region_code,
                 preset=args.preset,
                 sector=args.sector,
+                theme=args.theme,
                 top_n=args.top,
             )
             results, excluded = _annotate(results)
-            print(f"\n## {region_name} - {args.preset}{sector_label} スクリーニング結果 (EquityQuery)\n")
+            print(f"\n## {region_name} - {args.preset}{sector_label}{theme_label} スクリーニング結果 (EquityQuery)\n")
             if excluded:
                 print(f"※ 直近売却済み {excluded}銘柄を除外\n")
             if args.preset == "shareholder-return" and HAS_SR_FORMAT:
@@ -432,7 +436,7 @@ def main():
     parser.add_argument(
         "--preset",
         default="value",
-        choices=["value", "high-dividend", "growth", "growth-value", "deep-value", "quality", "pullback", "alpha", "trending", "long-term", "shareholder-return"],
+        choices=["value", "high-dividend", "growth", "growth-value", "deep-value", "quality", "pullback", "alpha", "trending", "long-term", "shareholder-return", "high-growth"],
     )
     parser.add_argument(
         "--sector",
@@ -442,7 +446,7 @@ def main():
     parser.add_argument(
         "--theme",
         default=None,
-        help="Theme filter for trending preset (e.g., AI, semiconductor, EV)",
+        help="Theme filter (e.g., ai, ev, defense, cloud-saas). Supported by all presets except trending/pullback/alpha.",
     )
     parser.add_argument("--top", type=int, default=20)
     parser.add_argument(
@@ -482,6 +486,24 @@ def main():
             sys.exit(1)
         args.sector = matched
 
+    # Validate theme (KIK-439)
+    _THEME_UNSUPPORTED_PRESETS = {"trending", "pullback", "alpha"}
+    if args.theme is not None:
+        if args.preset in _THEME_UNSUPPORTED_PRESETS:
+            print(f"Warning: --theme is not supported with --preset {args.preset}. Ignoring --theme.")
+            args.theme = None
+        else:
+            try:
+                from src.core.screening.query_builder import load_themes
+                valid_themes = load_themes()
+                if args.theme not in valid_themes:
+                    print(f"Warning: Unknown theme '{args.theme}'. Valid themes:")
+                    for key, td in sorted(valid_themes.items()):
+                        print(f"  - {key}: {td.get('description', '')}")
+                    sys.exit(1)
+            except Exception:
+                pass  # Graceful degradation if themes.yaml is unavailable
+
     # pullback preset always uses query mode (needs EquityQuery + technical analysis)
     if args.preset == "pullback" and args.mode == "legacy":
         print("Note: pullback preset requires query mode. Switching to --mode query.")
@@ -493,6 +515,10 @@ def main():
 
     if args.preset == "growth" and args.mode == "legacy":
         print("Note: growth preset requires query mode. Switching to --mode query.")
+        args.mode = "query"
+
+    if args.preset == "high-growth" and args.mode == "legacy":
+        print("Note: high-growth preset requires query mode. Switching to --mode query.")
         args.mode = "query"
 
     if args.preset == "trending" and args.mode == "legacy":

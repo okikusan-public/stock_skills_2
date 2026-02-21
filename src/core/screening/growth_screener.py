@@ -29,6 +29,7 @@ class GrowthScreener:
         region: str = "jp",
         top_n: int = 20,
         sector: Optional[str] = None,
+        theme: Optional[str] = None,
     ) -> list[dict]:
         """Run the two-step growth screening pipeline.
 
@@ -40,6 +41,8 @@ class GrowthScreener:
             Maximum number of results to return.
         sector : str, optional
             Sector filter (e.g. 'Technology').
+        theme : str, optional
+            Theme filter key (e.g. 'ai', 'ev', 'defense').
 
         Returns
         -------
@@ -49,7 +52,7 @@ class GrowthScreener:
         criteria = load_preset("growth")
 
         # Step 1: EquityQuery for growth-filtered stocks (sorted by market cap)
-        query = build_query(criteria, region=region, sector=sector)
+        query = build_query(criteria, region=region, sector=sector, theme=theme)
 
         # Fetch enough candidates for detail enrichment
         fetch_size = max(top_n * 3, 60)

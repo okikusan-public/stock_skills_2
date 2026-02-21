@@ -41,6 +41,9 @@
 「Xで話題の銘柄は？」     → /screen-stocks japan trending
 「長期で持てる株」        → /screen-stocks japan long-term
 「テクノロジーの割安株」   → /screen-stocks japan value --sector Technology
+「AI関連の割安株」        → /screen-stocks us --theme ai --preset value
+「半導体の成長株」        → /screen-stocks us --theme ai --preset high-growth
+「防衛関連株を探して」    → /screen-stocks us --theme defense --preset alpha
 ```
 
 **KIK-452 GraphRAG コンテキスト**: スクリーニング結果の末尾に、Neo4j ナレッジグラフから取得したセクタートレンド・投資メモ・テーマ情報が自動表示される（Neo4j 接続時のみ）。Grok API 接続時は AI 統合サマリーも付加。Neo4j 未接続の場合はこのセクションは非表示となり、スクリーニング本体の動作には影響しない。
@@ -63,7 +66,22 @@
 | 長期、じっくり、安定成長、バイ＆ホールド | long-term |
 | 還元、株主還元、自社株買い、バイバック、総還元 | shareholder-return |
 | 安定して還元、継続的に高還元、還元が続いてる | shareholder-return（✅/📈 銘柄を推奨） |
+| 爆発的成長、ハイグロース、利益不問の成長株、赤字成長株、PSR重視、売上急成長 | high-growth |
 | 指定なし | alpha |
+
+**KIK-439 関連（テーマスクリーニング）**:
+- テーマ + プリセット: `--theme <テーマ>` をプリセットと組み合わせて使用
+- 「AI株」「半導体」「AI関連」「AI銘柄」→ `--theme ai`
+- 「EV」「電気自動車」「次世代自動車」→ `--theme ev`
+- 「クラウド」「SaaS」→ `--theme cloud-saas`
+- 「サイバーセキュリティ」「セキュリティ株」→ `--theme cybersecurity`
+- 「バイオ」「創薬」「バイオテック」→ `--theme biotech`
+- 「再エネ」「太陽光」「再生可能エネルギー」→ `--theme renewable-energy`
+- 「防衛」「軍需」「航空宇宙」→ `--theme defense`
+- 「フィンテック」「金融テック」→ `--theme fintech`
+- 「ヘルスケア」「医療機器」「医療」→ `--theme healthcare`
+- 組み合わせ例: 「AI関連で割安株」→ `--theme ai --preset value`、「半導体の成長株」→ `--theme ai --preset high-growth`
+- `trending`/`pullback`/`alpha` プリセットは `--theme` 未対応（他のプリセットのみ）
 
 ### 分析ドメイン → `/stock-report` or `/market-research`
 

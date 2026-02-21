@@ -7,6 +7,7 @@ import yaml
 from yfinance import EquityQuery
 
 _CONFIG_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "screening_presets.yaml"
+_THEMES_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "themes.yaml"
 
 
 def load_preset(preset_name: str) -> dict:
@@ -48,6 +49,10 @@ _CRITERIA_FIELD_MAP: dict[str, tuple[str, str]] = {
     "min_revenue_growth":   ("totalrevenues1yrgrowth.lasttwelvemonths", "gt"),
     "min_earnings_growth":  ("epsgrowth.lasttwelvemonths",           "gt"),
     "min_market_cap":       ("intradaymarketcap",                    "gt"),
+    # KIK-432: high-growth preset fields
+    "min_quarterly_revenue_growth": ("quarterlyrevenuegrowth.quarterly",               "gt"),
+    "max_psr":                       ("lastclosemarketcaptotalrevenue.lasttwelvemonths", "lt"),
+    "min_gross_margin":              ("grossprofitmargin.lasttwelvemonths",              "gt"),
 }
 
 # ---------------------------------------------------------------------------
@@ -165,6 +170,56 @@ def _build_exchange_condition(exchange: str) -> Optional[EquityQuery]:
     return EquityQuery("eq", ["exchange", exchange.upper()])
 
 
+def load_themes() -> dict:
+    """Load theme definitions from config/themes.yaml.
+
+    Returns
+    -------
+    dict
+        Mapping of theme key to theme definition dict.
+        Returns empty dict if the file does not exist.
+    """
+    if not _THEMES_PATH.exists():
+        return {}
+    try:
+        with _THEMES_PATH.open(encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except yaml.YAMLError:
+        return {}
+    return data.get("themes", {})
+
+
+def _build_theme_condition(theme: str, themes: dict) -> EquityQuery:
+    """Build an EquityQuery condition for theme filtering.
+
+    Parameters
+    ----------
+    theme : str
+        Theme key (e.g. 'ai', 'ev', 'defense').
+    themes : dict
+        Theme definitions loaded from themes.yaml via ``load_themes()``.
+
+    Returns
+    -------
+    EquityQuery
+        An ``is-in`` condition matching all industries in the theme.
+
+    Raises
+    ------
+    ValueError
+        If the theme key is not found in the themes dict.
+    """
+    if theme not in themes:
+        valid = ", ".join(sorted(themes.keys()))
+        raise ValueError(
+            f"テーマ '{theme}' は未定義です。有効なテーマ: {valid}"
+        )
+    industries = themes[theme].get("industries", [])
+    if not industries:
+        raise ValueError(f"テーマ '{theme}' に industries が定義されていません")
+    return EquityQuery("is-in", ["industry", *industries])
+
+
 def _build_sector_condition(sector: str) -> EquityQuery:
     """Build an EquityQuery condition for sector filtering.
 
@@ -185,8 +240,9 @@ def build_query(
     region: Optional[str] = None,
     exchange: Optional[str] = None,
     sector: Optional[str] = None,
+    theme: Optional[str] = None,
 ) -> EquityQuery:
-    """Build a complete EquityQuery from criteria, region, exchange, and sector.
+    """Build a complete EquityQuery from criteria, region, exchange, sector, and theme.
 
     All provided conditions are combined with AND.
 
@@ -201,6 +257,9 @@ def build_query(
         both conditions are included.
     sector : str, optional
         Sector filter (e.g. 'Technology', 'Financial Services').
+    theme : str, optional
+        Theme filter key (e.g. 'ai', 'ev', 'defense'). Maps to a list
+        of industries defined in config/themes.yaml.
 
     Returns
     -------
@@ -210,7 +269,7 @@ def build_query(
     Raises
     ------
     ValueError
-        If no conditions could be built (empty criteria and no region/exchange/sector).
+        If no conditions could be built (empty criteria and no region/exchange/sector/theme).
     """
     conditions: list[EquityQuery] = []
 
@@ -229,6 +288,11 @@ def build_query(
     # Sector condition
     if sector is not None:
         conditions.append(_build_sector_condition(sector))
+
+    # Theme condition (KIK-439)
+    if theme is not None:
+        themes = load_themes()
+        conditions.append(_build_theme_condition(theme, themes))
 
     # Criteria conditions
     criteria_conds = _build_criteria_conditions(criteria)

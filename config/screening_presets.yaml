@@ -67,6 +67,14 @@ presets:
       max_per: 20
       min_roe: 0.08
 
+  high-growth:
+    description: "高成長株（利益不問・売上急成長・PSRでバブル防止）"
+    criteria:
+      min_revenue_growth: 0.20           # 売上成長率 >= 20% (YoY)
+      min_quarterly_revenue_growth: 0.10  # 直近四半期売上成長率 >= 10%
+      max_psr: 20.0                       # PSR <= 20（バブル防止）
+      min_gross_margin: 0.20              # 粗利率 >= 20%（最低限の事業性）
+
   long-term:
     description: "長期投資適性（高ROE・EPS成長・高配当・安定企業）"
     criteria:

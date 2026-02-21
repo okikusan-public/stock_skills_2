@@ -9,6 +9,8 @@ from src.core.screening.query_builder import (
     _build_region_condition,
     _build_exchange_condition,
     _build_sector_condition,
+    _build_theme_condition,
+    load_themes,
     REGION_MAP,
     EXCHANGE_MAP,
     ASEAN_REGIONS,
@@ -250,6 +252,174 @@ class TestConstants:
         assert set(ASEAN_EXCHANGES) == {"SES", "SET", "KLS", "JKT", "PHS"}
 
     def test_criteria_field_map_keys(self):
-        """_CRITERIA_FIELD_MAP should have the expected keys."""
-        expected = {"max_per", "max_pbr", "min_dividend_yield", "min_roe", "min_revenue_growth", "min_earnings_growth", "min_market_cap"}
+        """_CRITERIA_FIELD_MAP should have the expected keys including KIK-432 additions."""
+        expected = {
+            "max_per", "max_pbr", "min_dividend_yield", "min_roe",
+            "min_revenue_growth", "min_earnings_growth", "min_market_cap",
+            # KIK-432: high-growth preset criteria
+            "min_quarterly_revenue_growth", "max_psr", "min_gross_margin",
+        }
         assert set(_CRITERIA_FIELD_MAP.keys()) == expected
+
+
+# ===================================================================
+# KIK-432: high-growth criteria in _CRITERIA_FIELD_MAP
+# ===================================================================
+
+
+class TestHighGrowthCriteriaInMap:
+    def test_min_quarterly_revenue_growth_present(self):
+        """min_quarterly_revenue_growth should be mapped to quarterly revenue growth field."""
+        assert "min_quarterly_revenue_growth" in _CRITERIA_FIELD_MAP
+        field, op = _CRITERIA_FIELD_MAP["min_quarterly_revenue_growth"]
+        assert "quarterlyrevenuegrowth" in field
+        assert op == "gt"
+
+    def test_max_psr_present(self):
+        """max_psr should be mapped to PSR field with lt operator."""
+        assert "max_psr" in _CRITERIA_FIELD_MAP
+        field, op = _CRITERIA_FIELD_MAP["max_psr"]
+        assert "lastclosemarketcaptotalrevenue" in field
+        assert op == "lt"
+
+    def test_min_gross_margin_present(self):
+        """min_gross_margin should be mapped to gross profit margin field."""
+        assert "min_gross_margin" in _CRITERIA_FIELD_MAP
+        field, op = _CRITERIA_FIELD_MAP["min_gross_margin"]
+        assert "grossprofitmargin" in field
+        assert op == "gt"
+
+    def test_build_query_with_high_growth_criteria(self):
+        """build_query with high-growth criteria should produce EquityQuery with all conditions."""
+        criteria = {
+            "min_revenue_growth": 0.20,
+            "min_quarterly_revenue_growth": 0.10,
+            "max_psr": 20.0,
+            "min_gross_margin": 0.20,
+        }
+        query = build_query(criteria, region="us")
+        assert isinstance(query, EquityQuery)
+
+
+# ===================================================================
+# KIK-439: load_themes
+# ===================================================================
+
+
+class TestLoadThemes:
+    def test_returns_dict(self):
+        """load_themes() should return a dict."""
+        themes = load_themes()
+        assert isinstance(themes, dict)
+
+    def test_has_ai_key(self):
+        """load_themes() should include 'ai' theme."""
+        themes = load_themes()
+        assert "ai" in themes
+
+    def test_ai_has_industries(self):
+        """ai theme should have a non-empty industries list."""
+        themes = load_themes()
+        industries = themes["ai"].get("industries", [])
+        assert isinstance(industries, list)
+        assert len(industries) > 0
+
+    def test_ai_has_description(self):
+        """ai theme should have a description string."""
+        themes = load_themes()
+        assert isinstance(themes["ai"].get("description"), str)
+
+    def test_all_9_themes_present(self):
+        """All 9 expected themes should be present."""
+        themes = load_themes()
+        expected = {"ai", "ev", "cloud-saas", "cybersecurity", "biotech",
+                    "renewable-energy", "fintech", "defense", "healthcare"}
+        assert expected.issubset(set(themes.keys()))
+
+    def test_defense_single_industry(self):
+        """defense theme has exactly one industry."""
+        themes = load_themes()
+        assert len(themes["defense"]["industries"]) == 1
+
+    def test_missing_file_returns_empty_dict(self, monkeypatch, tmp_path):
+        """load_themes() should return {} when themes.yaml does not exist."""
+        import src.core.screening.query_builder as qb
+        monkeypatch.setattr(qb, "_THEMES_PATH", tmp_path / "nonexistent.yaml")
+        result = load_themes()
+        assert result == {}
+
+
+# ===================================================================
+# KIK-439: _build_theme_condition
+# ===================================================================
+
+
+class TestBuildThemeCondition:
+    def test_valid_theme_returns_equity_query(self):
+        """Valid theme key should return an EquityQuery."""
+        themes = load_themes()
+        cond = _build_theme_condition("ai", themes)
+        assert isinstance(cond, EquityQuery)
+
+    def test_invalid_theme_raises_value_error(self):
+        """Unknown theme key should raise ValueError."""
+        themes = load_themes()
+        with pytest.raises(ValueError, match="未定義"):
+            _build_theme_condition("unknown-theme", themes)
+
+    def test_defense_single_industry(self):
+        """Single-industry theme (defense) should still produce EquityQuery."""
+        themes = load_themes()
+        cond = _build_theme_condition("defense", themes)
+        assert isinstance(cond, EquityQuery)
+
+    def test_error_message_includes_valid_themes(self):
+        """ValueError message should list valid themes."""
+        themes = {"ai": {"industries": ["Semiconductors"]}}
+        with pytest.raises(ValueError) as exc_info:
+            _build_theme_condition("unknown", themes)
+        assert "ai" in str(exc_info.value)
+
+    def test_empty_industries_raises(self):
+        """Theme with empty industries list should raise ValueError."""
+        themes = {"badtheme": {"industries": []}}
+        with pytest.raises(ValueError):
+            _build_theme_condition("badtheme", themes)
+
+    def test_theme_key_is_case_sensitive(self):
+        """Theme key lookup is case-sensitive: 'AI' should not match 'ai'."""
+        themes = load_themes()
+        with pytest.raises(ValueError):
+            _build_theme_condition("AI", themes)
+
+
+# ===================================================================
+# KIK-439: build_query with theme
+# ===================================================================
+
+
+class TestBuildQueryWithTheme:
+    def test_theme_produces_query(self):
+        """build_query with theme should return EquityQuery."""
+        query = build_query({}, region="us", theme="ai")
+        assert isinstance(query, EquityQuery)
+
+    def test_theme_none_backward_compat(self):
+        """build_query with theme=None should behave identically to before."""
+        query = build_query({}, region="us", theme=None)
+        assert isinstance(query, EquityQuery)
+
+    def test_sector_and_theme_combined(self):
+        """build_query with both sector and theme should include both conditions."""
+        query = build_query({}, region="us", sector="Technology", theme="ai")
+        assert isinstance(query, EquityQuery)
+
+    def test_theme_with_criteria(self):
+        """build_query with theme and criteria should produce combined query."""
+        query = build_query({"max_per": 20}, region="us", theme="ev")
+        assert isinstance(query, EquityQuery)
+
+    def test_invalid_theme_raises(self):
+        """Invalid theme key should raise ValueError from build_query."""
+        with pytest.raises(ValueError):
+            build_query({}, region="us", theme="nonexistent-theme")
