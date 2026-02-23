@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "..
 from scripts.common import try_import, HAS_HISTORY_STORE, HAS_GRAPH_QUERY as _HAS_GQ, print_context, print_suggestions
 from src.data.yahoo_client import get_stock_info, get_stock_detail
 from src.core.screening.indicators import calculate_value_score
+from src.core.common import is_etf
 
 HAS_SHAREHOLDER_RETURN, _sr = try_import("src.core.screening.indicators", "calculate_shareholder_return")
 if HAS_SHAREHOLDER_RETURN: calculate_shareholder_return = _sr["calculate_shareholder_return"]
@@ -36,6 +37,77 @@ if HAS_INDUSTRY_CONTEXT:
     from src.data.graph_query import get_industry_research_for_sector
 
 
+def _print_etf_report(symbol: str, data: dict):
+    """ETF専用レポートを出力する (KIK-469)."""
+    def fmt(val, pct=False):
+        if val is None:
+            return "-"
+        return f"{val * 100:.2f}%" if pct else f"{val:.4f}"
+
+    def fmt_int(val):
+        if val is None:
+            return "-"
+        return f"{val:,.0f}"
+
+    print(f"# {data.get('name', symbol)} ({symbol}) [ETF]")
+    print()
+
+    # ファンド概要
+    print("## ファンド概要")
+    print("| 項目 | 値 |")
+    print("|---:|:---|")
+    print(f"| カテゴリ | {data.get('fund_category') or '-'} |")
+    print(f"| ファンドファミリー | {data.get('fund_family') or '-'} |")
+    print(f"| 純資産総額 (AUM) | {fmt_int(data.get('total_assets_fund'))} |")
+    print(f"| 経費率 | {fmt(data.get('expense_ratio'), pct=True)} |")
+    print()
+
+    # 経費率評価
+    er = data.get("expense_ratio")
+    if er is not None:
+        if er <= 0.001:
+            er_verdict = "超低コスト（優良）"
+        elif er <= 0.005:
+            er_verdict = "低コスト（良好）"
+        elif er <= 0.01:
+            er_verdict = "やや高め"
+        else:
+            er_verdict = "高コスト（要検討）"
+        print(f"- **経費率評価**: {er_verdict}")
+        print()
+
+    # パフォーマンス
+    print("## パフォーマンス")
+    print("| 指標 | 値 |")
+    print("|---:|:---|")
+    print(f"| 現在値 | {fmt_int(data.get('price'))} |")
+    print(f"| 配当利回り | {fmt(data.get('dividend_yield_trailing'), pct=True)} |")
+    print(f"| β値 | {fmt(data.get('beta'))} |")
+    print(f"| 52週高値 | {fmt_int(data.get('fifty_two_week_high'))} |")
+    print(f"| 52週安値 | {fmt_int(data.get('fifty_two_week_low'))} |")
+    print()
+
+    # AUM評価
+    aum = data.get("total_assets_fund")
+    if aum is not None:
+        if aum >= 10_000_000_000:
+            aum_verdict = "大規模（流動性十分）"
+        elif aum >= 1_000_000_000:
+            aum_verdict = "中規模（流動性良好）"
+        elif aum >= 100_000_000:
+            aum_verdict = "小規模（流動性に注意）"
+        else:
+            aum_verdict = "極小（償還リスクあり）"
+        print(f"- **ファンド規模**: {aum_verdict}")
+
+    # 履歴保存
+    if HAS_HISTORY:
+        try:
+            history_save_report(symbol, data, 0, "ETF")
+        except Exception:
+            pass
+
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: generate_report.py <ticker>")
@@ -54,6 +126,12 @@ def main():
     if data is None:
         print(f"Error: {symbol} のデータを取得できませんでした。")
         sys.exit(1)
+
+    # KIK-469: ETF auto-detection
+    if is_etf(data):
+        _print_etf_report(symbol, data)
+        print_suggestions(symbol=symbol, context_summary=f"ETFレポート生成: {symbol}")
+        return
 
     thresholds = {"per_max": 15, "pbr_max": 1.0, "dividend_yield_min": 0.03, "roe_min": 0.08}
     score = calculate_value_score(data, thresholds)
