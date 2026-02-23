@@ -164,6 +164,8 @@ def get_stock_info(symbol: str) -> Optional[dict]:
             "beta": _safe_get(info, "beta"),
             "fifty_two_week_high": _safe_get(info, "fiftyTwoWeekHigh"),
             "fifty_two_week_low": _safe_get(info, "fiftyTwoWeekLow"),
+            # Quote type (KIK-469)
+            "quoteType": _safe_get(info, "quoteType"),
         }
 
         _sanitize_anomalies(result)
@@ -425,6 +427,12 @@ def get_stock_detail(symbol: str) -> Optional[dict]:
             number_of_analyst_opinions = int(number_of_analyst_opinions_val) if number_of_analyst_opinions_val is not None else None
             recommendation_mean = _safe_get(info, "recommendationMean")
             forward_eps = _safe_get(info, "forwardEps")
+            # ETF-specific fields (KIK-469)
+            expense_ratio: Optional[float] = _safe_get(info, "annualReportExpenseRatio")
+            total_assets_fund: Optional[float] = _safe_get(info, "totalAssets")  # AUM
+            fund_category: Optional[str] = _safe_get(info, "category")
+            fund_family: Optional[str] = _safe_get(info, "fundFamily")
+            quote_type: Optional[str] = _safe_get(info, "quoteType")
         except Exception:
             pass
 
@@ -460,6 +468,12 @@ def get_stock_detail(symbol: str) -> Optional[dict]:
             "dividend_paid_history": dividend_paid_history,
             "stock_repurchase_history": stock_repurchase_history,
             "cashflow_fiscal_years": cashflow_fiscal_years,
+            # ETF fields (KIK-469)
+            "quoteType": quote_type,
+            "expense_ratio": expense_ratio,
+            "total_assets_fund": total_assets_fund,
+            "fund_category": fund_category,
+            "fund_family": fund_family,
         })
 
         # 5. Cache the result

@@ -36,6 +36,22 @@ def stock_detail_data() -> dict:
 
 
 @pytest.fixture
+def etf_info_data() -> dict:
+    """Load the etf_info.json fixture (VGK basic info)."""
+    path = FIXTURES_DIR / "etf_info.json"
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@pytest.fixture
+def etf_detail_data() -> dict:
+    """Load the etf_detail.json fixture (VGK detailed info)."""
+    path = FIXTURES_DIR / "etf_detail.json"
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@pytest.fixture
 def price_history_df() -> pd.DataFrame:
     """Load the price_history.csv fixture as a pandas DataFrame.
 

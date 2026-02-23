@@ -91,6 +91,13 @@ def format_health_check(health_data: dict) -> str:
         lt = pos.get("long_term", {})
         lt_label = lt.get("label", "-")
 
+        # ETF-specific display (KIK-469)
+        change_q = pos.get("change_quality", {})
+        etf_health = change_q.get("etf_health") or lt.get("etf_health")
+        if change_q.get("is_etf") and etf_health:
+            quality = "ETF"
+            lt_label = etf_health.get("expense_label", "-")
+
         # Return stability (KIK-403)
         rs = pos.get("return_stability", {})
         rs_label = rs.get("label", "-") if rs else "-"
@@ -159,10 +166,19 @@ def format_health_check(health_data: dict) -> str:
                 f"SMA200={_fmt_float(sma200)}, "
                 f"RSI={_fmt_float(rsi)}\uff09"
             )
-            lines.append(
-                f"- \u5909\u5316\u306e\u8cea: {quality_label}"
-                f"\uff08\u5909\u5316\u30b9\u30b3\u30a2 {change_score:.0f}/100\uff09"
-            )
+
+            # ETF-specific context (KIK-469)
+            etf_h = change_q.get("etf_health")
+            if change_q.get("is_etf") and etf_h:
+                lines.append(f"- ETF: {etf_h.get('fund_category', '-')} / {etf_h.get('fund_family', '-')}")
+                lines.append(f"- 経費率: {etf_h.get('expense_label', '-')} / AUM: {etf_h.get('aum_label', '-')}")
+                for etf_alert in etf_h.get("alerts", []):
+                    lines.append(f"- {etf_alert}")
+            else:
+                lines.append(
+                    f"- \u5909\u5316\u306e\u8cea: {quality_label}"
+                    f"\uff08\u5909\u5316\u30b9\u30b3\u30a2 {change_score:.0f}/100\uff09"
+                )
 
             # Long-term suitability context (KIK-371)
             lt = pos.get("long_term", {})
