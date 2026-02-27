@@ -9,6 +9,8 @@ import pytest
 
 from src.data import embedding_client
 
+pytestmark = pytest.mark.no_auto_mock
+
 
 @pytest.fixture(autouse=True)
 def _reset():

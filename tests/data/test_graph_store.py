@@ -6,6 +6,8 @@ Neo4j driver is mocked -- no real database connection needed.
 import pytest
 from unittest.mock import MagicMock, patch, call
 
+pytestmark = pytest.mark.no_auto_mock
+
 
 # ===================================================================
 # Fixtures

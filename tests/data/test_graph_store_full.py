@@ -8,6 +8,8 @@ import os
 import pytest
 from unittest.mock import MagicMock, patch
 
+pytestmark = pytest.mark.no_auto_mock
+
 
 # ===================================================================
 # Fixtures

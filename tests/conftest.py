@@ -95,3 +95,32 @@ def mock_yahoo_client(monkeypatch):
     monkeypatch.setattr(yahoo_client, "get_price_history", mock.get_price_history)
 
     return mock
+
+
+# ---------------------------------------------------------------------------
+# Auto-mock external services (KIK-529)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def _block_external_io(request, monkeypatch):
+    """Block Neo4j / TEI / Grok I/O in all tests.
+
+    Tests that directly test these clients should add:
+        pytestmark = pytest.mark.no_auto_mock
+    """
+    if request.node.get_closest_marker("no_auto_mock"):
+        return
+
+    # Neo4j: _get_mode() returns "off" → all merge_* return False immediately
+    monkeypatch.setenv("NEO4J_MODE", "off")
+    monkeypatch.setattr("src.data.graph_store._get_driver", lambda: None)
+    monkeypatch.setattr("src.data.graph_store.is_available", lambda: False)
+    monkeypatch.setattr("src.data.graph_store._unavailable_warned", True)
+
+    # TEI: no HTTP calls
+    from src.data import embedding_client as _ec
+    monkeypatch.setattr(_ec, "is_available", lambda: False)
+    monkeypatch.setattr(_ec, "get_embedding", lambda text: None)
+
+    # Grok: ensure no API key → functions return EMPTY_* immediately
+    monkeypatch.delenv("XAI_API_KEY", raising=False)

@@ -7,6 +7,7 @@ Tests that:
 """
 
 import csv
+import functools
 import sys
 from io import StringIO
 from pathlib import Path
@@ -24,6 +25,7 @@ sys.path.insert(0, str(SCRIPTS_PATH))
 # Module loader helper
 # ---------------------------------------------------------------------------
 
+@functools.lru_cache(maxsize=1)
 def _load_run_portfolio():
     """Load run_portfolio module fresh (avoids shared-state issues)."""
     import importlib.util
