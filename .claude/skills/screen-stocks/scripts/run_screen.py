@@ -548,36 +548,6 @@ def run_query_mode(args):
             print()
         return
 
-    # momentum preset uses MomentumScreener
-    if args.preset == "momentum":
-        screener = MomentumScreener(yahoo_client)
-        submode = args.submode or "surge"
-        for region_code in regions:
-            region_name = REGION_NAMES.get(region_code, region_code.upper())
-            sector_label = f" [{args.sector}]" if args.sector else ""
-            theme_label = f" [{args.theme}]" if args.theme else ""
-            submode_label = f" [{submode}モード]" if submode != "surge" else ""
-            print(f"\n## {region_name} - モメンタム銘柄{sector_label}{theme_label}{submode_label} スクリーニング結果\n")
-            print("Step 1: 52週高値圏条件で絞り込み中...")
-            results = screener.screen(
-                region=region_code, top_n=args.top, submode=submode,
-                sector=args.sector, theme=args.theme,
-            )
-            results, excluded = _annotate(results)
-            print(f"Step 2-3 完了: {len(results)}銘柄がモメンタム条件に合致\n")
-            if excluded:
-                print(f"※ 直近売却済み {excluded}銘柄を除外\n")
-            print(format_momentum_markdown(results))
-            _print_recurring_picks(results)
-            _print_graphrag_context(results)
-            if HAS_HISTORY and results:
-                try:
-                    save_screening(preset="momentum", region=region_code, results=results, sector=args.sector, theme=args.theme)
-                except Exception as e:
-                    print(f"Warning: 履歴保存失敗: {e}", file=sys.stderr)
-            print()
-        return
-
     screener = QueryScreener(yahoo_client)
 
     for region_code in regions:

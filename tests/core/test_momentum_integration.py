@@ -116,7 +116,7 @@ def test_momentum_screener_sorts_by_score(mock_yahoo_client):
 
     if len(results) > 1:
         # Check that scores are in descending order
-        scores = [r.get("momentum_score", 0) for r in results]
+        scores = [r.get("surge_score", 0) for r in results]
         assert scores == sorted(scores, reverse=True)
 
 

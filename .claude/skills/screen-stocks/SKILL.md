@@ -117,6 +117,37 @@ python3 .../run_screen.py --preset value --auto-theme
 - `high-growth` : 高成長株（利益不問・売上成長率≧20%・直近四半期売上成長≧10%・PSR≦20・粗利率≧20%。赤字成長企業も対象。PERは使わずPSRでバブル防止）（KIK-432）
 - `small-cap-growth` : 小型急成長株（時価総額1000億以下・売上成長率≧20%・PSR≦15・粗利率≧20%。機関投資家未発見の10倍株候補。地域別時価総額自動調整付き。リスク★★★★）（KIK-437）
 - `contrarian` : 逆張り候補（テクニカル売られすぎ × バリュエーション割安 × ファンダ堅調。3軸100点スコアリング。バリュートラップの対極で「市場の過剰反応」を検出）（KIK-504）
+- `momentum` : モメンタム急騰銘柄（RSI/MACD/出来高急増/トレンド整合の4軸スコアリング。上昇トレンドにある銘柄を検出。`--submode` で安定加速か急騰かを選択可能）（KIK-506）
+
+### Momentum スクリーニング詳細（KIK-506）
+
+#### 3段階モメンタム分類
+
+| 分類 | 条件 | 説明 |
+|:---|:---|:---|
+| 🟢 加速 (accelerating) | スコア 40〜69 | 安定した上昇モメンタム。過熱感なく継続性が高い |
+| 🟡 急騰 (surge) | スコア 70〜89 | 急激な価格上昇。短期注目度は高いが調整に注意 |
+| 🔴 過熱 (overheated) | スコア 90〜100 | 過熱状態。高いリターンが期待できるが調整リスクあり |
+
+#### `--submode` パラメータ
+
+`--submode` で表示する分類を絞り込める。
+
+| 値 | 表示対象 | 推奨ユースケース |
+|:---|:---|:---|
+| `stable`（デフォルト） | 🟢 加速のみ | 安定した上昇トレンド銘柄を選びたい場合 |
+| `surge` | 🟡 急騰 + 🔴 過熱 | 短期の急騰銘柄も含めたい場合 |
+
+#### 4軸スコアリング
+
+| 軸 | 満点 | 判定条件 |
+|:---|:---|:---|
+| RSI強度 | 25 | RSI ≧ 60 |
+| MACDクロス | 25 | MACD > シグナルライン（強気クロス） |
+| モメンタム率 | 25 | 20日間価格変化率が閾値を超える |
+| 出来高急増 | 25 | 5日平均出来高 / 20日平均出来高 ≧ 1.3 |
+
+合計スコア ≧ 40 でモメンタム銘柄として判定。
 
 ## 出力
 
@@ -142,6 +173,9 @@ python3 .../run_screen.py --preset value --auto-theme
 
 ### Contrarian モードの出力列
 順位 / 銘柄 / 株価 / PER / PBR / RSI / SMA200乖離 / テク / バリュ / ファンダ / 総合 / 判定
+
+### Momentum モードの出力列
+順位 / 銘柄 / 株価 / PER / RSI / MACD / モメンタム率 / 出来高比 / モメンタムスコア / 総合スコア / 分類
 
 ### Shareholder Return モードの出力列
 順位 / 銘柄 / 株価 / 配当利回り / 自社株買い利回り / 総還元率 / 安定度 / ROE / PER
@@ -244,6 +278,15 @@ python3 .../run_screen.py --region us --preset contrarian
 
 # テクノロジーセクターの逆張り候補
 python3 .../run_screen.py --region japan --preset contrarian --sector Technology
+
+# 日本の急騰・モメンタム銘柄（安定加速のみ、デフォルト）
+python3 .claude/skills/screen-stocks/scripts/run_screen.py --preset momentum --region japan --top 10
+
+# 米国の急騰銘柄を含むモメンタムスクリーニング（急騰・過熱も含む）
+python3 .claude/skills/screen-stocks/scripts/run_screen.py --preset momentum --region us --top 5 --submode surge
+
+# テクノロジーセクターのモメンタム銘柄
+python3 .../run_screen.py --region japan --preset momentum --sector Technology
 ```
 
 ## アノテーション機能 (KIK-418/419)
