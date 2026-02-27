@@ -48,19 +48,22 @@ pip install -r requirements.txt
 詳細は [docs/architecture.md](docs/architecture.md)（3層構成・Mermaid図）、[docs/neo4j-schema.md](docs/neo4j-schema.md)（グラフスキーマ）、[docs/skill-catalog.md](docs/skill-catalog.md)（8スキル）を参照。
 
 ### レイヤー概要
+<!-- BEGIN AUTO-GENERATED ARCHITECTURE -->
 ```
 Skills (.claude/skills/*/SKILL.md → scripts/*.py) — 8スキル
-Core   (src/core/) — screening/ portfolio/ risk/ research/ + proactive_engine (KIK-435), health_check (KIK-469: ETF対応+PF統合), return_estimate (KIK-469 P2: volatility+is_etf), action_item_detector + action_item_bridge (KIK-472: Linear連携+GraphRAG紐付け), portfolio/adjustment_advisor + market_regime (KIK-496: 17ルール調整アドバイザー), screening/contrarian + contrarian_screener (KIK-504/533: 逆張りスコア3軸100pt, ヘルスチェック連動), screening/momentum + momentum_screener (KIK-506: モメンタム急騰4軸検出), ...
-Data   (src/data/) — yahoo_client/ (KIK-449: submodule分割, KIK-469: ETFフィールド), grok_client, grok_context (KIK-488: Neo4j知識→Grokプロンプト注入), linear_client (KIK-472), history_store, graph_store, graph_linker (KIK-434), note_manager (KIK-473: journal type + auto symbol detection), ...
-Output (src/output/) — formatter, stress_formatter, portfolio_formatter, research_formatter, health_formatter (KIK-469 P2: stock/ETFテーブル分離), adjust_formatter (KIK-496), momentum_formatter (KIK-506)
+Core   (src/core/) — portfolio/, research/, risk/, screening/, action_item_bridge (KIK-472: GraphRAG紐付け), action_item_detector (KIK-472: Linear連携), common, health_check (KIK-469: ETF対応+PF統合), models, proactive_engine (KIK-435), return_estimate (KIK-469 P2: volatility+is_etf), ticker_utils (KIK-449), value_trap (KIK-381)
+Data   (src/data/) — graph_query/ (KIK-508: submodule分割), graph_store/ (KIK-507: submodule分割), grok_client/ (KIK-508: submodule分割), yahoo_client/ (KIK-449: submodule分割, KIK-469: ETFフィールド), auto_context (KIK-411/420: ハイブリッド検索), embedding_client (KIK-420: TEIベクトル検索), graph_linker (KIK-434), graph_nl_query (KIK-411), grok_context (KIK-488: Neo4j知識→Grokプロンプト注入), history_store (KIK-428), linear_client (KIK-472), note_manager (KIK-473: journal type + auto symbol detection), screen_annotator (KIK-452: GraphRAGコンテキスト), screening_context (KIK-452), summary_builder
+Output (src/output/) — adjust_formatter (KIK-496), analyze_formatter, forecast_formatter, formatter, health_formatter (KIK-469 P2: stock/ETFテーブル分離), portfolio_formatter, rebalance_formatter (KIK-376), research_formatter, review_formatter (KIK-441), screening_summary_formatter (KIK-452/532), simulate_formatter (KIK-376), stress_formatter
 
 Config: config/screening_presets.yaml (15 presets), config/exchanges.yaml (60+ regions)
 Rules:  .claude/rules/ (graph-context, intent-routing, workflow, development, screening, portfolio, testing)
-Docs:   docs/ (architecture, neo4j-schema, skill-catalog)
+Docs:   docs/ (architecture, neo4j-schema, skill-catalog, api-reference, data-models)
 ```
+<!-- END AUTO-GENERATED ARCHITECTURE -->
 
 ## Post-Implementation Rule
 
 **機能実装後は必ずドキュメント・ルールを更新すること。** 詳細は `.claude/rules/workflow.md` の「7. ドキュメント・ルール更新」を参照。
 
-更新対象: `intent-routing.md`、該当 `SKILL.md`、`CLAUDE.md`、`rules/*.md`、`README.md`
+自動生成: `docs/api-reference.md`、`CLAUDE.md` Architecture、`development.md` テスト数、`docs/skill-catalog.md` 概要（pre-commit hook で自動実行）
+手動更新: `intent-routing.md`、該当 `SKILL.md`、`rules/*.md`、`README.md`

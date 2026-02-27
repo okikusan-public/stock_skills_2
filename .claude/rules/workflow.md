@@ -126,20 +126,33 @@ python3 .claude/skills/stress-test/scripts/run_stress_test.py --portfolio 7203.T
 
 **機能実装後、マージ前に必ず以下を確認・更新する。**
 
-### 更新チェックリスト
+### 自動生成ドキュメント（KIK-525）
+
+以下は `scripts/generate_docs.py all` で自動生成されるため手動更新不要:
+
+| 対象 | 自動生成内容 |
+|:---|:---|
+| `docs/api-reference.md` | src/ の public 関数・クラスのシグネチャ |
+| `CLAUDE.md` Architecture | レイヤー概要（モジュール一覧 + KIK アノテーション） |
+| `development.md` テスト数 | `約NNNテスト` のカウント |
+| `docs/skill-catalog.md` 概要 | スキル一覧テーブル |
+
+pre-commit hook で src/ 変更時に自動実行される。新しいモジュールにKIKアノテーションを付けたい場合は `config/module_annotations.yaml` を編集する。
+
+### 手動更新チェックリスト
 
 | 対象 | 更新条件 | 更新内容 |
 |:---|:---|:---|
 | `intent-routing.md` | 新しいキーワード・意図が増えた | ドメイン判定テーブル、キーワード追加 |
 | 該当 `SKILL.md` | スキルの機能・出力が変わった | description、出力項目、コマンド例 |
-| `CLAUDE.md` | アーキテクチャ・モジュール構成が変わった | Architecture 図、モジュール説明 |
 | `rules/portfolio.md` | PF系の機能が追加・変更された | セクション追加、KIK番号追記 |
 | `rules/screening.md` | スクリーニング系の機能が追加・変更された | ルール追記 |
+| `docs/data-models.md` | stock_info/stock_detail のフィールドが変わった | テーブル更新（fixture と整合性検証あり） |
 | `README.md` | ユーザー向けの機能説明が必要 | スキル説明、使用例 |
 
 ### 判断基準
 
-- **新機能追加**: intent-routing + SKILL.md + CLAUDE.md + README.md を全部更新
+- **新機能追加**: intent-routing + SKILL.md + README.md を手動更新（CLAUDE.md Architecture は自動）
 - **既存機能の改善**: 該当する SKILL.md + rules のみ
 - **バグ修正のみ**: ドキュメント更新不要（ただし挙動が変わる場合は SKILL.md を更新）
 

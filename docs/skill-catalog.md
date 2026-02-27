@@ -6,16 +6,18 @@
 
 ## Overview
 
-| Skill | Description | Core Dependencies |
-|:---|:---|:---|
-| screen-stocks | 割安株スクリーニング (60地域, 15プリセット) | screening/*.py, yahoo_client |
-| stock-report | 個別銘柄バリュエーションレポート | indicators.py, value_trap.py, yahoo_client |
-| market-research | 深掘りリサーチ (銘柄/業界/市場/ビジネスモデル) | researcher.py, grok_client |
-| watchlist | ウォッチリスト管理 (add/remove/list) | (直接 JSON) |
-| stress-test | ポートフォリオストレステスト (8シナリオ) | risk/*.py, yahoo_client |
-| stock-portfolio | ポートフォリオ管理 (13サブコマンド) | portfolio/*.py, health_check.py, return_estimate.py, adjustment_advisor.py |
-| investment-note | 投資メモ管理 (save/list/delete) | note_manager.py, graph_store.py |
-| graph-query | 知識グラフ自然言語照会 | graph_nl_query.py, graph_query.py |
+<!-- BEGIN AUTO-GENERATED OVERVIEW -->
+| Skill | Description |
+|:---|:---|
+| graph-query | 知識グラフへの自然言語クエリ。過去のレポート・スクリーニング・取引・リサーチ・市況を検索。 |
+| investment-note | 投資メモの管理。投資テーゼ・懸念・学びなどをノートとして記録・参照・削除。 |
+| market-research | 銘柄・業界・マーケット・ビジネスモデルの深掘りリサーチ。Grok API (X/Web検索) と yfinance を統合して多角的な分析レポートを生成する。 |
+| screen-stocks | 割安株スクリーニング。EquityQuery で銘柄リスト不要のスクリーニング。PER/PBR/配当利回り/ROE等で日本株・米国株・ASEAN株・香港株... |
+| stock-portfolio | ポートフォリオ管理。保有銘柄の一覧表示・売買記録・構造分析。ストレステストの入力データ基盤。 |
+| stock-report | 個別銘柄・ETFの詳細レポート。ティッカーシンボルを指定して財務分析レポートを生成する。個別株はバリュエーション・割安度判定・株主還元率を表示。ETFは経... |
+| stress-test | ポートフォリオのストレステスト。保有銘柄リストを受け取り、ショック感応度・シナリオ分析・因果連鎖を通じてPFの弱点を特定する。 |
+| watchlist | ウォッチリストの管理。銘柄の追加・削除・一覧表示。 |
+<!-- END AUTO-GENERATED OVERVIEW -->
 
 ---
 

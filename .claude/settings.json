@@ -14,8 +14,8 @@
           },
           {
             "type": "command",
-            "command": "FILE=$(cat | jq -r '.tool_input.file_path // empty'); if echo \"$FILE\" | grep -qE 'src/(core|data)/.*\\.py$'; then echo 'コアモジュール変更: CLAUDE.md / SKILL.md / rules の更新を確認してください'; fi",
-            "timeout": 5000
+            "command": "FILE=$(cat | jq -r '.tool_input.file_path // empty'); if echo \"$FILE\" | grep -q '\\.py$'; then cd /Users/kikuchihiroyuki/stock-skills && python3 scripts/generate_docs.py check --quiet 2>&1 | tail -5; fi",
+            "timeout": 8000
           }
         ]
       }

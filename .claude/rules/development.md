@@ -24,7 +24,7 @@
 
 ## テスト
 
-- `python3 -m pytest tests/ -q` で全テスト実行（約2571テスト、~20秒）
+- `python3 -m pytest tests/ -q` で全テスト実行（約2587テスト、~20秒）
 - `tests/conftest.py` に共通フィクスチャ: `stock_info_data`, `stock_detail_data`, `price_history_df`, `mock_yahoo_client`
 - `tests/conftest.py` に autouse `_block_external_io` フィクスチャ: Neo4j/TEI/Grok を全テストで自動モック（KIK-529）。`@pytest.mark.no_auto_mock` でオプトアウト可
 - `tests/fixtures/` に JSON/CSV テストデータ（Toyota 7203.T ベース）
@@ -38,13 +38,31 @@
 - ブランチ名: `feature/kik-{NNN}-{short-desc}`
 - ワークツリー: `~/stock-skills-kik{NNN}`
 
-## ドキュメント更新リマインダー (KIK-407)
+## ドキュメント自動生成 (KIK-525)
 
-3レイヤーで `src/core/` `src/data/` 変更時のドキュメント更新漏れを防止:
+`scripts/generate_docs.py` で以下のドキュメントをソースコードから自動生成:
 
-1. **PostToolUse hook**: Edit/Write で `src/(core|data)/*.py` 変更時にリマインドメッセージ表示
-2. **Stop hook**: 会話終了時に未更新ドキュメントを指摘
-3. **pre-commit hook**: `scripts/hooks/pre-commit` — src/ 変更 + doc 未更新の commit をブロック（`--no-verify` でバイパス可）
+| ターゲット | 対象ファイル | 内容 |
+|:---|:---|:---|
+| `api-reference` | `docs/api-reference.md` | AST 解析で public 関数・クラスのシグネチャ+docstring を抽出 |
+| `architecture` | `CLAUDE.md` | マーカー間のレイヤー概要を src/ スキャンで再生成 |
+| `test-count` | `.claude/rules/development.md` | `pytest --co -q` でテスト数を更新 |
+| `skill-catalog` | `docs/skill-catalog.md` | SKILL.md frontmatter から概要テーブルを再生成 |
+| `data-models-verify` | `docs/data-models.md` | fixture との整合性検証（手動維持、不一致で警告） |
+
+```bash
+python3 scripts/generate_docs.py all           # 全ターゲット実行
+python3 scripts/generate_docs.py check --quiet  # 陳腐化チェック（hook 用）
+```
+
+**自動化レイヤー:**
+
+1. **PostToolUse hook**: `.py` ファイル編集時に `check --quiet` で陳腐化を検出・報告
+2. **pre-commit hook**: `scripts/hooks/pre-commit` — src/ 変更時に `generate_docs.py all` を自動実行 + `data-models-verify` で不一致をブロック
+
+**手動更新が必要なドキュメント:** `intent-routing.md`、各 `SKILL.md`、`rules/portfolio.md`、`rules/screening.md`
+
+**KIK アノテーション:** `config/module_annotations.yaml` にモジュール→KIK issue のマッピングを管理。CLAUDE.md Architecture に自動付与
 
 ## ドキュメント構成 (KIK-412)
 
@@ -52,6 +70,7 @@
 - `docs/neo4j-schema.md` — Neo4j スキーマリファレンス（21ノードタイプ、リレーション、制約/インデックス、サンプルCypher）
 - `docs/skill-catalog.md` — 8スキルのカタログ（概要、コマンド例、Core依存、出力形式）
 - `docs/data-models.md` — stock_info / stock_detail dict スキーマ定義（全フィールド名・型・yfinanceマッピング・正規化ルール）(KIK-524)
+- `docs/api-reference.md` — src/ の public API リファレンス（自動生成, KIK-525）
 
 新しいスキルやノードタイプを追加した場合は対応するドキュメントも更新すること。
 

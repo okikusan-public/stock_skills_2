@@ -1,0 +1,61 @@
+# KIK-issue annotations for auto-generated Architecture section in CLAUDE.md
+# Format: module_path: "annotation text"
+# Used by scripts/generate_docs.py architecture command
+
+# --- Core layer ---
+src/core/proactive_engine.py: "KIK-435"
+src/core/health_check.py: "KIK-469: ETF対応+PF統合"
+src/core/return_estimate.py: "KIK-469 P2: volatility+is_etf"
+src/core/action_item_detector.py: "KIK-472: Linear連携"
+src/core/action_item_bridge.py: "KIK-472: GraphRAG紐付け"
+src/core/value_trap.py: "KIK-381"
+src/core/ticker_utils.py: "KIK-449"
+
+# screening/
+src/core/screening/contrarian.py: "KIK-504/533: 逆張りスコア3軸100pt"
+src/core/screening/contrarian_screener.py: "KIK-504/533: ヘルスチェック連動"
+src/core/screening/momentum.py: "KIK-506: モメンタム急騰4軸検出"
+src/core/screening/momentum_screener.py: "KIK-506"
+src/core/screening/trending_screener.py: "KIK-440: Grokトレンドテーマ検出"
+src/core/screening/pullback_screener.py: "KIK-332"
+src/core/screening/growth_screener.py: "KIK-446"
+src/core/screening/alpha_screener.py: "KIK-357"
+
+# portfolio/
+src/core/portfolio/adjustment_advisor.py: "KIK-496: 17ルール調整アドバイザー"
+src/core/portfolio/market_regime.py: "KIK-496: 市場レジーム検出"
+src/core/portfolio/small_cap.py: "KIK-438: 小型株アロケーション"
+src/core/portfolio/backtest.py: "KIK-441"
+src/core/portfolio/simulator.py: "KIK-376"
+src/core/portfolio/rebalancer.py: "KIK-376"
+
+# risk/
+src/core/risk/scenario_analysis.py: "KIK-354"
+
+# research/
+src/core/research/researcher.py: "KIK-359: Grok統合リサーチ"
+
+# --- Data layer ---
+src/data/yahoo_client/__init__.py: "KIK-449: submodule分割, KIK-469: ETFフィールド"
+src/data/grok_client/__init__.py: "KIK-508: submodule分割"
+src/data/grok_context.py: "KIK-488: Neo4j知識→Grokプロンプト注入"
+src/data/linear_client.py: "KIK-472"
+src/data/graph_store/__init__.py: "KIK-507: submodule分割"
+src/data/graph_query/__init__.py: "KIK-508: submodule分割"
+src/data/graph_linker.py: "KIK-434"
+src/data/note_manager.py: "KIK-473: journal type + auto symbol detection"
+src/data/history_store.py: "KIK-428"
+src/data/auto_context.py: "KIK-411/420: ハイブリッド検索"
+src/data/embedding_client.py: "KIK-420: TEIベクトル検索"
+src/data/screen_annotator.py: "KIK-452: GraphRAGコンテキスト"
+src/data/screening_context.py: "KIK-452"
+src/data/graph_nl_query.py: "KIK-411"
+
+# --- Output layer ---
+src/output/health_formatter.py: "KIK-469 P2: stock/ETFテーブル分離"
+src/output/adjust_formatter.py: "KIK-496"
+src/output/momentum_formatter.py: "KIK-506"
+src/output/screening_summary_formatter.py: "KIK-452/532"
+src/output/review_formatter.py: "KIK-441"
+src/output/simulate_formatter.py: "KIK-376"
+src/output/rebalance_formatter.py: "KIK-376"

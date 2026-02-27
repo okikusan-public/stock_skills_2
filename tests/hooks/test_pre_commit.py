@@ -1,6 +1,7 @@
-"""Tests for the pre-commit hook logic (KIK-407).
+"""Tests for the pre-commit hook logic (KIK-407, KIK-525).
 
 Creates a temporary git repo and tests the hook script behavior.
+When generate_docs.py is not available, falls back to manual doc check.
 """
 
 import os
@@ -68,13 +69,14 @@ class TestPreCommitHook:
         assert "ドキュメントが更新されていません" in result.stderr or "ドキュメントが更新されていません" in result.stdout
 
     def test_src_change_with_doc_allows_commit(self, tmp_path):
-        """src/ 変更 + ドキュメント更新の場合、コミットが成功すること."""
+        """src/ 変更 + ドキュメント更新の場合、コミットが成功すること (fallback mode)."""
         repo = _init_repo(tmp_path)
 
         (repo / "src" / "data").mkdir(parents=True)
         (repo / "src" / "data" / "bar.py").write_text("y = 2")
-        (repo / "CLAUDE.md").write_text("updated")
-        subprocess.run(["git", "add", "src/data/bar.py", "CLAUDE.md"], cwd=str(repo), capture_output=True)
+        (repo / "docs").mkdir(parents=True)
+        (repo / "docs" / "update.md").write_text("updated")
+        subprocess.run(["git", "add", "src/data/bar.py", "docs/update.md"], cwd=str(repo), capture_output=True)
 
         result = subprocess.run(
             ["git", "commit", "-m", "test with docs"],
@@ -124,7 +126,7 @@ class TestPreCommitHook:
         assert result.returncode == 0
 
     def test_rules_dir_counts_as_doc(self, tmp_path):
-        """rules/ ディレクトリの変更がドキュメント更新としてカウントされること."""
+        """rules/ ディレクトリの変更がドキュメント更新としてカウントされること (fallback mode)."""
         repo = _init_repo(tmp_path)
 
         (repo / "src" / "core").mkdir(parents=True)
