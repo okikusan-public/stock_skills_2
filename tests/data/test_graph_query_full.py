@@ -52,7 +52,7 @@ class TestGetStockNewsHistory:
 
     def test_no_driver(self):
         from src.data.graph_query import get_stock_news_history
-        with patch("src.data.graph_query._get_driver", return_value=None):
+        with patch("src.data.graph_query._common._get_driver", return_value=None):
             assert get_stock_news_history("NVDA") == []
 
     def test_error(self, mock_session):
@@ -77,7 +77,7 @@ class TestGetSentimentTrend:
 
     def test_no_driver(self):
         from src.data.graph_query import get_sentiment_trend
-        with patch("src.data.graph_query._get_driver", return_value=None):
+        with patch("src.data.graph_query._common._get_driver", return_value=None):
             assert get_sentiment_trend("NVDA") == []
 
     def test_error(self, mock_session):
@@ -104,7 +104,7 @@ class TestGetCatalysts:
 
     def test_no_driver(self):
         from src.data.graph_query import get_catalysts
-        with patch("src.data.graph_query._get_driver", return_value=None):
+        with patch("src.data.graph_query._common._get_driver", return_value=None):
             result = get_catalysts("NVDA")
             assert result == {"positive": [], "negative": []}
 
@@ -132,7 +132,7 @@ class TestGetReportTrend:
 
     def test_no_driver(self):
         from src.data.graph_query import get_report_trend
-        with patch("src.data.graph_query._get_driver", return_value=None):
+        with patch("src.data.graph_query._common._get_driver", return_value=None):
             assert get_report_trend("7203.T") == []
 
     def test_error(self, mock_session):
@@ -158,7 +158,7 @@ class TestGetUpcomingEvents:
 
     def test_no_driver(self):
         from src.data.graph_query import get_upcoming_events
-        with patch("src.data.graph_query._get_driver", return_value=None):
+        with patch("src.data.graph_query._common._get_driver", return_value=None):
             assert get_upcoming_events() == []
 
     def test_error(self, mock_session):
