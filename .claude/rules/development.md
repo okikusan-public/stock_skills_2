@@ -20,6 +20,7 @@
 - 配当利回りの正規化: `_normalize_ratio()` が値 > 1 の場合 100 で割って比率に変換
 - フィールド名のエイリアス: indicators.py は yfinance 生キー（`trailingPE`, `priceToBook`）と正規化済みキー（`per`, `pbr`）の両方を対応
 - `src/core/` はサブフォルダ構成（screening/, portfolio/, risk/, research/）。新モジュールは適切なサブフォルダに配置。import は直接パス（`src.core.screening.screener` 等）を使用
+- データモデル定義: `stock_info` / `stock_detail` dict のスキーマ（全フィールド名・型・yfinance マッピング）は `docs/data-models.md` を参照 (KIK-524)
 
 ## テスト
 
@@ -50,6 +51,7 @@
 - `docs/architecture.md` — システムアーキテクチャ（3層構成、Mermaid図、設計原則、モジュール一覧）
 - `docs/neo4j-schema.md` — Neo4j スキーマリファレンス（21ノードタイプ、リレーション、制約/インデックス、サンプルCypher）
 - `docs/skill-catalog.md` — 8スキルのカタログ（概要、コマンド例、Core依存、出力形式）
+- `docs/data-models.md` — stock_info / stock_detail dict スキーマ定義（全フィールド名・型・yfinanceマッピング・正規化ルール）(KIK-524)
 
 新しいスキルやノードタイプを追加した場合は対応するドキュメントも更新すること。
 
