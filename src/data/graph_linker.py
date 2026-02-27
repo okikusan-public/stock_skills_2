@@ -11,7 +11,6 @@ or any exception occurs.
 
 import json
 import os
-import re
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
@@ -30,8 +29,7 @@ _MAX_CANDIDATES = 10
 _LLM_TIMEOUT = 20  # seconds
 
 
-def _safe_id(text: str) -> str:
-    return re.sub(r"[^a-zA-Z0-9]", "_", text)
+from src.data.graph_store._common import _safe_id  # noqa: E402 (KIK-507: dedup)
 
 
 # ---------------------------------------------------------------------------
