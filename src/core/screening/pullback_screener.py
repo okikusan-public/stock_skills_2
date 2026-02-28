@@ -1,5 +1,7 @@
-"""PullbackScreener: pullback-in-uptrend entry opportunity screening."""
+"""PullbackScreener: pullback-in-uptrend entry opportunity screening (KIK-530: parallel)."""
 
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
 from src.core.screening.indicators import calculate_value_score
@@ -7,13 +9,15 @@ from src.core.screening.query_builder import build_query
 from src.core.screening.query_screener import QueryScreener
 from src.core.screening.technicals import detect_pullback_in_uptrend
 
+_MAX_WORKERS = int(os.environ.get("SCREEN_MAX_WORKERS", "5"))
+
 
 class PullbackScreener:
     """Screen stocks for pullback-in-uptrend entry opportunities.
 
     Three-step pipeline:
       Step 1: EquityQuery for fundamental filtering (PER<20, ROE>8%, EPS growth>5%)
-      Step 2: Technical filter - detect pullback in uptrend
+      Step 2: Technical filter - detect pullback in uptrend (parallel)
       Step 3: Scoring (value_score from Step 1)
     """
 
@@ -37,6 +41,51 @@ class PullbackScreener:
             and ``get_stock_detail()``.
         """
         self.yahoo_client = yahoo_client
+
+    def _score_one_stock(self, stock: dict) -> Optional[dict]:
+        """Evaluate a single stock for pullback-in-uptrend signals.
+
+        Returns the enriched stock dict if it passes, else None.
+        """
+        symbol = stock.get("symbol")
+        if not symbol:
+            return None
+
+        # KIK-506: post-filter — reject stocks far from 52-week high
+        high_change = stock.get("fifty_two_week_high_change_pct")
+        if high_change is not None and high_change < -0.15:
+            return None
+
+        hist = self.yahoo_client.get_price_history(symbol)
+        if hist is None or hist.empty:
+            return None
+
+        tech_result = detect_pullback_in_uptrend(hist)
+        if tech_result is None:
+            return None
+
+        all_conditions = tech_result.get("all_conditions")
+        bounce_score = tech_result.get("bounce_score", 0)
+
+        if all_conditions:
+            match_type = "full"
+        elif (
+            bounce_score >= 30
+            and tech_result.get("uptrend")
+            and tech_result.get("is_pullback")
+        ):
+            match_type = "partial"
+        else:
+            return None
+
+        stock["pullback_pct"] = tech_result.get("pullback_pct")
+        stock["rsi"] = tech_result.get("rsi")
+        stock["volume_ratio"] = tech_result.get("volume_ratio")
+        stock["sma50"] = tech_result.get("sma50")
+        stock["sma200"] = tech_result.get("sma200")
+        stock["bounce_score"] = bounce_score
+        stock["match_type"] = match_type
+        return stock
 
     def screen(
         self,
@@ -82,57 +131,28 @@ class PullbackScreener:
         fundamentals: list[dict] = []
         for quote in raw_quotes:
             normalized = QueryScreener._normalize_quote(quote)
-            # Also compute value_score for fallback scoring
             normalized["value_score"] = calculate_value_score(normalized)
             # KIK-506: preserve 52-week high change for post-filter (no extra API call)
             normalized["fifty_two_week_high_change_pct"] = quote.get("fiftyTwoWeekHighChangePercent")
             fundamentals.append(normalized)
 
         # ---------------------------------------------------------------
-        # Step 2: Technical filter - pullback in uptrend
+        # Step 2: Technical filter - pullback in uptrend (parallel)
         # ---------------------------------------------------------------
         technical_passed: list[dict] = []
-        for stock in fundamentals:
-            symbol = stock.get("symbol")
-            if not symbol:
-                continue
 
-            # KIK-506: post-filter — reject stocks far from 52-week high
-            high_change = stock.get("fifty_two_week_high_change_pct")
-            if high_change is not None and high_change < -0.15:
-                continue  # >15% below 52-week high → not a stable uptrend
-
-            hist = self.yahoo_client.get_price_history(symbol)
-            if hist is None or hist.empty:
-                continue
-
-            tech_result = detect_pullback_in_uptrend(hist)
-            if tech_result is None:
-                continue
-
-            all_conditions = tech_result.get("all_conditions")
-            bounce_score = tech_result.get("bounce_score", 0)
-
-            if all_conditions:
-                match_type = "full"
-            elif (
-                bounce_score >= 30
-                and tech_result.get("uptrend")
-                and tech_result.get("is_pullback")
-            ):
-                match_type = "partial"
-            else:
-                continue
-
-            # Attach technical indicators to the stock dict
-            stock["pullback_pct"] = tech_result.get("pullback_pct")
-            stock["rsi"] = tech_result.get("rsi")
-            stock["volume_ratio"] = tech_result.get("volume_ratio")
-            stock["sma50"] = tech_result.get("sma50")
-            stock["sma200"] = tech_result.get("sma200")
-            stock["bounce_score"] = bounce_score
-            stock["match_type"] = match_type
-            technical_passed.append(stock)
+        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
+            futures = {
+                executor.submit(self._score_one_stock, stock): stock
+                for stock in fundamentals
+            }
+            for future in as_completed(futures):
+                try:
+                    result = future.result()
+                    if result is not None:
+                        technical_passed.append(result)
+                except Exception:
+                    pass  # skip failed stocks
 
         if not technical_passed:
             return []

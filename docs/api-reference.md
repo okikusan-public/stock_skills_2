@@ -500,7 +500,7 @@ Contrarian signal: detect oversold stocks with solid fundamentals (KIK-504, KIK-
 
 ### src.core.screening.contrarian_screener (KIK-504/533: ヘルスチェック連動)
 
-ContrarianScreener: oversold-but-solid screening pipeline (KIK-504, KIK-533).
+ContrarianScreener: oversold-but-solid screening pipeline (KIK-504, KIK-533, KIK-530).
 
 
 #### class ContrarianScreener
@@ -547,7 +547,7 @@ Momentum technical indicators for momentum-based screening.
 
 ### src.core.screening.momentum_screener (KIK-506)
 
-MomentumScreener: momentum surge / breakout screening (KIK-506).
+MomentumScreener: momentum surge / breakout screening (KIK-506, KIK-530: parallel).
 
 
 #### class MomentumScreener
@@ -557,7 +557,7 @@ Screen for momentum surge / breakout stocks.
 
 ### src.core.screening.pullback_screener (KIK-332)
 
-PullbackScreener: pullback-in-uptrend entry opportunity screening.
+PullbackScreener: pullback-in-uptrend entry opportunity screening (KIK-530: parallel).
 
 
 #### class PullbackScreener

@@ -1,10 +1,14 @@
-"""MomentumScreener: momentum surge / breakout screening (KIK-506)."""
+"""MomentumScreener: momentum surge / breakout screening (KIK-506, KIK-530: parallel)."""
 
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
 from src.core.screening.query_builder import build_query
 from src.core.screening.query_screener import QueryScreener
 from src.core.screening.technicals import detect_momentum_surge
+
+_MAX_WORKERS = int(os.environ.get("SCREEN_MAX_WORKERS", "5"))
 
 
 class MomentumScreener:
@@ -16,7 +20,7 @@ class MomentumScreener:
 
     Three-step pipeline:
       Step 1: EquityQuery (momentum criteria + liquidity + market cap)
-      Step 2: Technical analysis (detect_momentum_surge)
+      Step 2: Technical analysis (detect_momentum_surge) — parallel
       Step 3: Filter + rank by surge_score
     """
 
@@ -34,6 +38,49 @@ class MomentumScreener:
 
     def __init__(self, yahoo_client):
         self.yahoo_client = yahoo_client
+
+    def _score_one_stock(self, quote: dict, submode: str) -> Optional[dict]:
+        """Evaluate a single stock for momentum signals.
+
+        Returns the enriched stock dict if it passes, else None.
+        """
+        normalized = QueryScreener._normalize_quote(quote)
+        symbol = normalized.get("symbol")
+        if not symbol:
+            return None
+
+        fifty_day_avg_change = quote.get("fiftyDayAverageChangePercent")
+        fifty_two_wk_high_change = quote.get("fiftyTwoWeekHighChangePercent")
+
+        hist = self.yahoo_client.get_price_history(symbol)
+        if hist is None or hist.empty:
+            return None
+
+        surge_result = detect_momentum_surge(
+            hist,
+            fifty_day_avg_change_pct=fifty_day_avg_change,
+            fifty_two_week_high_change_pct=fifty_two_wk_high_change,
+        )
+
+        level = surge_result["surge_level"]
+
+        if submode == "stable":
+            if level != "accelerating":
+                return None
+        else:  # surge
+            if level == "none":
+                return None
+
+        normalized["ma50_deviation"] = surge_result["ma50_deviation"]
+        normalized["ma200_deviation"] = surge_result["ma200_deviation"]
+        normalized["volume_ratio"] = surge_result["volume_ratio"]
+        normalized["rsi"] = surge_result["rsi"]
+        normalized["surge_level"] = level
+        normalized["surge_score"] = surge_result["surge_score"]
+        normalized["near_high"] = surge_result["near_high"]
+        normalized["new_high"] = surge_result["new_high"]
+        normalized["high_change_pct"] = fifty_two_wk_high_change
+        return normalized
 
     def screen(
         self,
@@ -79,49 +126,21 @@ class MomentumScreener:
         if not raw_quotes:
             return []
 
-        # Step 2: Technical analysis + filtering
+        # Step 2: Technical analysis + filtering (parallel)
         scored: list[dict] = []
-        for quote in raw_quotes:
-            normalized = QueryScreener._normalize_quote(quote)
-            symbol = normalized.get("symbol")
-            if not symbol:
-                continue
 
-            # Precomputed values from EquityQuery response (no extra API call)
-            fifty_day_avg_change = quote.get("fiftyDayAverageChangePercent")
-            fifty_two_wk_high_change = quote.get("fiftyTwoWeekHighChangePercent")
-
-            hist = self.yahoo_client.get_price_history(symbol)
-            if hist is None or hist.empty:
-                continue
-
-            surge_result = detect_momentum_surge(
-                hist,
-                fifty_day_avg_change_pct=fifty_day_avg_change,
-                fifty_two_week_high_change_pct=fifty_two_wk_high_change,
-            )
-
-            level = surge_result["surge_level"]
-
-            # Submode filter
-            if submode == "stable":
-                if level != "accelerating":
-                    continue
-            else:  # surge
-                if level == "none":
-                    continue
-
-            # Attach surge data
-            normalized["ma50_deviation"] = surge_result["ma50_deviation"]
-            normalized["ma200_deviation"] = surge_result["ma200_deviation"]
-            normalized["volume_ratio"] = surge_result["volume_ratio"]
-            normalized["rsi"] = surge_result["rsi"]
-            normalized["surge_level"] = level
-            normalized["surge_score"] = surge_result["surge_score"]
-            normalized["near_high"] = surge_result["near_high"]
-            normalized["new_high"] = surge_result["new_high"]
-            normalized["high_change_pct"] = fifty_two_wk_high_change
-            scored.append(normalized)
+        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
+            futures = {
+                executor.submit(self._score_one_stock, quote, submode): quote
+                for quote in raw_quotes
+            }
+            for future in as_completed(futures):
+                try:
+                    result = future.result()
+                    if result is not None:
+                        scored.append(result)
+                except Exception:
+                    pass  # skip failed stocks
 
         if not scored:
             return []

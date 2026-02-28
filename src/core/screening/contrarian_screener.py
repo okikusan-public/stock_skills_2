@@ -1,5 +1,7 @@
-"""ContrarianScreener: oversold-but-solid screening pipeline (KIK-504, KIK-533)."""
+"""ContrarianScreener: oversold-but-solid screening pipeline (KIK-504, KIK-533, KIK-530)."""
 
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
 from src.core.screening.contrarian import compute_contrarian_score
@@ -7,13 +9,15 @@ from src.core.screening.indicators import calculate_value_score
 from src.core.screening.query_builder import build_query
 from src.core.screening.query_screener import QueryScreener
 
+_MAX_WORKERS = int(os.environ.get("SCREEN_MAX_WORKERS", "5"))
+
 
 class ContrarianScreener:
     """Screen for oversold stocks with solid fundamentals.
 
     Three-step pipeline:
       Step 1: EquityQuery for fundamental filtering (low PER/PBR, min ROE)
-      Step 2: Contrarian score calculation (technical + valuation + fundamental)
+      Step 2: Contrarian score calculation (technical + valuation + fundamental) — parallel
       Step 3: Filter (score >= 30) and rank by contrarian_score
     """
 
@@ -27,6 +31,40 @@ class ContrarianScreener:
 
     def __init__(self, yahoo_client):
         self.yahoo_client = yahoo_client
+
+    def _score_one_stock(self, stock: dict) -> Optional[dict]:
+        """Score a single stock for contrarian signals.
+
+        Returns the enriched stock dict if score >= threshold, else None.
+        """
+        symbol = stock.get("symbol")
+        if not symbol:
+            return None
+
+        hist = self.yahoo_client.get_price_history(symbol)
+
+        detail = self.yahoo_client.get_stock_detail(symbol)
+        if detail is None:
+            detail = {}
+
+        merged = {**stock, **detail}
+
+        ct_result = compute_contrarian_score(hist, merged)
+
+        if ct_result["contrarian_score"] < self._MIN_CONTRARIAN_SCORE:
+            return None
+
+        stock["contrarian_score"] = ct_result["contrarian_score"]
+        stock["contrarian_grade"] = ct_result["grade"]
+        stock["is_contrarian"] = ct_result["is_contrarian"]
+        stock["tech_score"] = ct_result["technical"]["score"]
+        stock["val_score"] = ct_result["valuation"]["score"]
+        stock["fund_score"] = ct_result["fundamental"]["score"]
+        stock["rsi"] = ct_result["technical"].get("rsi")
+        stock["sma200_deviation"] = ct_result["technical"].get("sma200_deviation")
+        stock["bb_position"] = ct_result["technical"].get("bb_position")
+        stock["volume_surge"] = ct_result["technical"].get("volume_surge")
+        return stock
 
     def screen(
         self,
@@ -76,42 +114,21 @@ class ContrarianScreener:
             normalized["value_score"] = calculate_value_score(normalized)
             fundamentals.append(normalized)
 
-        # Step 2: Contrarian score calculation
+        # Step 2: Contrarian score calculation (parallel)
         scored: list[dict] = []
 
-        for stock in fundamentals:
-            symbol = stock.get("symbol")
-            if not symbol:
-                continue
-
-            # Get price history for technical analysis
-            hist = self.yahoo_client.get_price_history(symbol)
-
-            # Get stock detail for fundamental divergence
-            detail = self.yahoo_client.get_stock_detail(symbol)
-            if detail is None:
-                detail = {}
-
-            # Merge normalized data with detail for complete picture
-            merged = {**stock, **detail}
-
-            ct_result = compute_contrarian_score(hist, merged)
-
-            if ct_result["contrarian_score"] < self._MIN_CONTRARIAN_SCORE:
-                continue
-
-            # Attach contrarian data to stock dict
-            stock["contrarian_score"] = ct_result["contrarian_score"]
-            stock["contrarian_grade"] = ct_result["grade"]
-            stock["is_contrarian"] = ct_result["is_contrarian"]
-            stock["tech_score"] = ct_result["technical"]["score"]
-            stock["val_score"] = ct_result["valuation"]["score"]
-            stock["fund_score"] = ct_result["fundamental"]["score"]
-            stock["rsi"] = ct_result["technical"].get("rsi")
-            stock["sma200_deviation"] = ct_result["technical"].get("sma200_deviation")
-            stock["bb_position"] = ct_result["technical"].get("bb_position")
-            stock["volume_surge"] = ct_result["technical"].get("volume_surge")
-            scored.append(stock)
+        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
+            futures = {
+                executor.submit(self._score_one_stock, stock): stock
+                for stock in fundamentals
+            }
+            for future in as_completed(futures):
+                try:
+                    result = future.result()
+                    if result is not None:
+                        scored.append(result)
+                except Exception:
+                    pass  # skip failed stocks
 
         if not scored:
             return []
