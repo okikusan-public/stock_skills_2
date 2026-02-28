@@ -274,3 +274,48 @@ class TestBuildNoteSummary:
         result = build_note_summary("7203.T", "thesis", "test", category="stock")
         assert "7203.T" in result
         assert "[stock]" not in result
+
+    # KIK-534: lesson with trigger/expected_action
+    def test_lesson_with_trigger_and_expected_action(self):
+        result = build_note_summary(
+            "7203.T", "lesson", "高値掴みした",
+            trigger="RSI70超で購入", expected_action="RSI70超では買わない",
+        )
+        assert "投資lesson:" in result
+        assert "RSI70超で購入" in result
+        assert "→" in result
+        assert "RSI70超では買わない" in result
+        assert "7203.T" in result
+
+    def test_lesson_with_trigger_only(self):
+        result = build_note_summary(
+            "", "lesson", "content",
+            trigger="モメンタムに飛びついた",
+        )
+        assert "投資lesson:" in result
+        assert "モメンタムに飛びついた" in result
+
+    def test_lesson_with_expected_action_only(self):
+        result = build_note_summary(
+            "", "lesson", "",
+            expected_action="出来高確認してから入る",
+        )
+        assert "投資lesson:" in result
+        assert "→ 出来高確認してから入る" in result
+
+    def test_lesson_without_extra_fields_is_normal(self):
+        """trigger/expected_action なしの lesson は従来形式."""
+        result = build_note_summary("AAPL", "lesson", "Don't chase")
+        assert "lesson:" in result
+        assert "Don't chase" in result
+        assert "投資lesson:" not in result
+
+    def test_lesson_with_category(self):
+        result = build_note_summary(
+            "", "lesson", "Portfolio lesson",
+            category="portfolio",
+            trigger="PF偏り放置", expected_action="月次でリバランス",
+        )
+        assert "[portfolio]" in result
+        assert "投資lesson:" in result
+        assert "PF偏り放置" in result

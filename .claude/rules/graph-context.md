@@ -146,6 +146,31 @@ CONTEXT_RECENT_HOURS=168    # これ以内 → RECENT / これ超 → STALE
 
 **KIK-503: target メモ→Linear issue 連携**: `type: target`（購入/売却予定）の投資メモ保存後、Linear issue 登録を促す。詳細は `intent-routing.md` の記録ドメインセクション参照
 
+## 投資lessonの参照 (KIK-534)
+
+`get_context.py` の出力に「## 投資lesson」セクションが自動付加される。type=lesson のノートに trigger（トリガー条件）と expected_action（次回アクション）が含まれている場合、スキル実行時のコンテキストとして表示される。
+
+### 参照タイミング
+
+- **スキル実行前**: `get_context.py` 経由で自動取得。銘柄指定時はその銘柄の lesson、銘柄なしは全 lesson を最大5件表示
+- **判断バイアス補正**: lesson に記録された過去の失敗パターン（trigger）が現在の状況に該当する場合、expected_action に従って判断を修正する
+
+### 補正ルール
+
+1. lesson の trigger が現在の分析対象・状況に一致する場合、**必ずその lesson を回答に織り込む**
+2. 「前にも同じパターンで失敗した」旨を明示し、expected_action を推奨する
+3. lesson がない場合や該当しない場合は、セクション自体を非表示（graceful degradation）
+
+### 例
+
+```
+## 投資lesson
+- [7203.T] 高値掴みした → 次回はRSI70超で買わない (2026-02-15)
+- モメンタムに飛びついた → 出来高確認してから入る (2026-02-10)
+```
+
+→ 7203.T のレポート実行時、RSI が 70 超なら「過去の lesson: 高値掴みリスクあり」と注意喚起する
+
 ## Grokプロンプト文脈注入 (KIK-488)
 
 `src/data/grok_context.py` がNeo4jから投資家文脈（保有状態・前回レポート・テーゼ・懸念等）をコンパクトに抽出し、Grok APIプロンプトに注入する。

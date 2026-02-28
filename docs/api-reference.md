@@ -729,7 +729,7 @@ Semantic summary template builders for Neo4j vector search (KIK-420).
 - `build_health_summary(health_date: str, summary: dict | None=None) -> str` — Build summary for a HealthCheck node.
 - `build_research_summary(research_type: str, target: str, result: dict) -> str` — Build summary for a Research node.
 - `build_market_context_summary(context_date: str, indices: list[dict] | None=None, grok_research: dict | None=None) -> str` — Build summary for a MarketContext node.
-- `build_note_summary(symbol: str='', note_type: str='', content: str='', category: str='') -> str` — Build summary for a Note node.
+- `build_note_summary(symbol: str='', note_type: str='', content: str='', category: str='', trigger: str='', expected_action: str='') -> str` — Build summary for a Note node.
 - `build_watchlist_summary(name: str='', symbols: list[str] | None=None) -> str` — Build summary for a Watchlist node.
 - `build_stress_test_summary(test_date: str, scenario: str='', portfolio_impact: float=0, symbol_count: int=0) -> str` — Build summary for a StressTest node (KIK-428).
 - `build_forecast_summary(forecast_date: str, optimistic: float | None=None, base: float | None=None, pessimistic: float | None=None, symbol_count: int=0) -> str` — Build summary for a Forecast node (KIK-428).
@@ -978,7 +978,7 @@ Linear API client for action item management (KIK-472).
 
 Note manager -- dual-write to JSON files and Neo4j (KIK-397, KIK-429).
 
-- `save_note(symbol: Optional[str]=None, note_type: str='observation', content: str='', source: str='', category: Optional[str]=None, base_dir: str=_NOTES_DIR) -> dict` — Save a note to JSON file and Neo4j.
+- `save_note(symbol: Optional[str]=None, note_type: str='observation', content: str='', source: str='', category: Optional[str]=None, base_dir: str=_NOTES_DIR, trigger: Optional[str]=None, expected_action: Optional[str]=None) -> dict` — Save a note to JSON file and Neo4j.
 - `load_notes(symbol: Optional[str]=None, note_type: Optional[str]=None, category: Optional[str]=None, base_dir: str=_NOTES_DIR) -> list[dict]` — Load notes from JSON files.
 - `delete_note(note_id: str, base_dir: str=_NOTES_DIR) -> bool` — Delete a note by ID from JSON files.
 

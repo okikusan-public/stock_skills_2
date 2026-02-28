@@ -141,6 +141,75 @@ class TestSaveNote:
 
 
 # ===================================================================
+# KIK-534: lesson trigger/expected_action tests
+# ===================================================================
+
+class TestSaveNoteLessonFields:
+    def test_lesson_with_trigger_and_expected_action(self, tmp_path):
+        """lesson に trigger と expected_action が保存されること."""
+        note = save_note(
+            "7203.T", "lesson", "高値掴みした",
+            trigger="RSI70超で購入",
+            expected_action="RSI70超では買わない",
+            base_dir=str(tmp_path),
+        )
+        assert note["type"] == "lesson"
+        assert note["trigger"] == "RSI70超で購入"
+        assert note["expected_action"] == "RSI70超では買わない"
+
+    def test_lesson_with_trigger_only(self, tmp_path):
+        """trigger のみ指定."""
+        note = save_note(
+            "AAPL", "lesson", "Lost money",
+            trigger="モメンタムに飛びついた",
+            base_dir=str(tmp_path),
+        )
+        assert note["trigger"] == "モメンタムに飛びついた"
+        assert "expected_action" not in note
+
+    def test_lesson_with_expected_action_only(self, tmp_path):
+        """expected_action のみ指定."""
+        note = save_note(
+            "AAPL", "lesson", "Learned patience",
+            expected_action="出来高確認してから入る",
+            base_dir=str(tmp_path),
+        )
+        assert "trigger" not in note
+        assert note["expected_action"] == "出来高確認してから入る"
+
+    def test_lesson_without_extra_fields(self, tmp_path):
+        """trigger/expected_action なしの lesson は従来通り."""
+        note = save_note("7203.T", "lesson", "Basic lesson", base_dir=str(tmp_path))
+        assert note["type"] == "lesson"
+        assert "trigger" not in note
+        assert "expected_action" not in note
+
+    def test_non_lesson_ignores_trigger(self, tmp_path):
+        """lesson 以外のタイプでは trigger/expected_action が無視されること."""
+        note = save_note(
+            "7203.T", "thesis", "test",
+            trigger="should be ignored",
+            expected_action="should be ignored",
+            base_dir=str(tmp_path),
+        )
+        assert "trigger" not in note
+        assert "expected_action" not in note
+
+    def test_lesson_fields_persisted_in_json(self, tmp_path):
+        """trigger/expected_action が JSON ファイルに永続化されること."""
+        save_note(
+            "7203.T", "lesson", "test",
+            trigger="trigger_text",
+            expected_action="action_text",
+            base_dir=str(tmp_path),
+        )
+        notes = load_notes(base_dir=str(tmp_path))
+        assert len(notes) == 1
+        assert notes[0]["trigger"] == "trigger_text"
+        assert notes[0]["expected_action"] == "action_text"
+
+
+# ===================================================================
 # KIK-473: journal note type tests
 # ===================================================================
 

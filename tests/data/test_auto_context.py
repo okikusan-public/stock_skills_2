@@ -17,6 +17,7 @@ from src.data.auto_context import (
     _days_since,
     _extract_symbol,
     _format_context,
+    _format_lesson_section,
     _format_market_context,
     _format_vector_results,
     _fresh_hours,
@@ -28,6 +29,7 @@ from src.data.auto_context import (
     _infer_skill_from_vectors,
     _is_market_query,
     _is_portfolio_query,
+    _load_lessons,
     _merge_context,
     _recent_hours,
     _recommend_skill,
@@ -994,3 +996,161 @@ class TestGetContextWithVectors:
         mock_vs.return_value = []
         result = get_context("今日はいい天気だ")
         assert result is None
+
+
+# ===================================================================
+# KIK-534: Investment lesson context tests
+# ===================================================================
+
+class TestFormatLessonSection:
+    """Tests for _format_lesson_section()."""
+
+    def test_empty_lessons(self):
+        """lesson が空 → 空文字列."""
+        assert _format_lesson_section([]) == ""
+
+    def test_lesson_with_trigger_and_expected_action(self):
+        """trigger + expected_action → 矢印で表示."""
+        lessons = [{
+            "symbol": "7203.T",
+            "trigger": "RSI70超で購入",
+            "expected_action": "RSI70超では買わない",
+            "content": "高値掴みした",
+            "date": "2026-02-15",
+        }]
+        md = _format_lesson_section(lessons)
+        assert "## 投資lesson" in md
+        assert "[7203.T]" in md
+        assert "RSI70超で購入" in md
+        assert "→" in md
+        assert "RSI70超では買わない" in md
+        assert "2026-02-15" in md
+
+    def test_lesson_with_trigger_only(self):
+        """trigger のみ."""
+        lessons = [{
+            "trigger": "モメンタムに飛びついた",
+            "content": "損切り",
+            "date": "2026-02-10",
+        }]
+        md = _format_lesson_section(lessons)
+        assert "トリガー: モメンタムに飛びついた" in md
+        assert "損切り" in md
+
+    def test_lesson_with_expected_action_only(self):
+        """expected_action のみ."""
+        lessons = [{
+            "expected_action": "出来高確認してから入る",
+            "content": "反省",
+            "date": "2026-02-10",
+        }]
+        md = _format_lesson_section(lessons)
+        assert "次回: 出来高確認してから入る" in md
+
+    def test_lesson_without_extra_fields(self):
+        """trigger/expected_action なし → content のみ."""
+        lessons = [{
+            "symbol": "AAPL",
+            "content": "Don't chase momentum",
+            "date": "2026-01-01",
+        }]
+        md = _format_lesson_section(lessons)
+        assert "## 投資lesson" in md
+        assert "[AAPL]" in md
+        assert "Don't chase momentum" in md
+
+    def test_max_5_lessons(self):
+        """最大5件に制限."""
+        lessons = [
+            {"content": f"lesson {i}", "date": f"2026-02-{i:02d}"}
+            for i in range(1, 8)
+        ]
+        md = _format_lesson_section(lessons)
+        assert "lesson 5" in md
+        assert "lesson 6" not in md
+
+    def test_no_symbol_no_bracket(self):
+        """symbol なし → ブラケットなし."""
+        lessons = [{"content": "General lesson", "date": "2026-01-01"}]
+        md = _format_lesson_section(lessons)
+        assert "[]" not in md
+        assert "General lesson" in md
+
+
+class TestLoadLessons:
+    """Tests for _load_lessons()."""
+
+    @patch("src.data.context.auto_context.note_manager")
+    def test_load_lessons_returns_list(self, mock_nm):
+        """lesson をロードしてリストを返す."""
+        mock_nm.load_notes.return_value = [{
+            "symbol": "7203.T", "type": "lesson",
+            "content": "test lesson",
+            "trigger": "bought high",
+            "expected_action": "wait for dip",
+            "date": "2026-02-28",
+        }]
+        result = _load_lessons("7203.T")
+        assert len(result) == 1
+        assert result[0]["trigger"] == "bought high"
+        mock_nm.load_notes.assert_called_once_with(note_type="lesson", symbol="7203.T")
+
+    @patch("src.data.context.auto_context.note_manager")
+    def test_load_lessons_graceful_degradation(self, mock_nm):
+        """load_notes エラー → 空リスト."""
+        mock_nm.load_notes.side_effect = Exception("fail")
+        result = _load_lessons()
+        assert result == []
+
+
+class TestGetContextWithLessons:
+    """Integration test: get_context appends lesson section."""
+
+    @patch("src.data.auto_context._load_lessons")
+    @patch("src.data.auto_context._check_bookmarked")
+    @patch("src.data.auto_context.graph_store")
+    def test_lesson_appended_to_context(self, mock_gs, mock_bm, mock_lessons):
+        """lesson セクションがコンテキストに追加されること."""
+        mock_gs.is_available.return_value = True
+        mock_gs.get_stock_history.return_value = {}
+        mock_gs.is_held.return_value = False
+        mock_bm.return_value = False
+        mock_lessons.return_value = [{
+            "symbol": "7203.T",
+            "trigger": "高値掴み",
+            "expected_action": "RSI確認",
+            "content": "反省",
+            "date": "2026-02-15",
+        }]
+        result = get_context("7203.Tってどう？")
+        assert result is not None
+        assert "## 投資lesson" in result["context_markdown"]
+        assert "高値掴み" in result["context_markdown"]
+        assert "RSI確認" in result["context_markdown"]
+
+    @patch("src.data.auto_context._load_lessons")
+    @patch("src.data.auto_context._check_bookmarked")
+    @patch("src.data.auto_context.graph_store")
+    def test_no_lessons_no_section(self, mock_gs, mock_bm, mock_lessons):
+        """lesson がない → セクション非表示."""
+        mock_gs.is_available.return_value = True
+        mock_gs.get_stock_history.return_value = {}
+        mock_gs.is_held.return_value = False
+        mock_bm.return_value = False
+        mock_lessons.return_value = []
+        result = get_context("AAPLを調べて")
+        assert result is not None
+        assert "## 投資lesson" not in result["context_markdown"]
+
+    @patch("src.data.auto_context._load_lessons", side_effect=Exception("fail"))
+    @patch("src.data.auto_context._check_bookmarked")
+    @patch("src.data.auto_context.graph_store")
+    def test_lesson_error_graceful_degradation(self, mock_gs, mock_bm, mock_les):
+        """lesson ロードエラー → graceful degradation (セクションなし)."""
+        mock_gs.is_available.return_value = True
+        mock_gs.get_stock_history.return_value = {}
+        mock_gs.is_held.return_value = False
+        mock_bm.return_value = False
+        result = get_context("7203.Tってどう？")
+        assert result is not None
+        assert "## 投資lesson" not in result["context_markdown"]

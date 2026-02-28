@@ -14,6 +14,7 @@ from typing import Optional
 
 from src.core.ticker_utils import SYMBOL_PATTERN, extract_symbol
 from src.data import graph_store, graph_query
+from src.data import note_manager
 
 # Backward-compatible alias (tests import _extract_symbol from this module)
 _extract_symbol = extract_symbol
@@ -462,6 +463,45 @@ def _merge_context(
 
 
 # ---------------------------------------------------------------------------
+# Investment lesson context (KIK-534)
+# ---------------------------------------------------------------------------
+
+def _load_lessons(symbol: Optional[str] = None) -> list[dict]:
+    """Load type=lesson notes from JSON files (graceful degradation).
+
+    Falls back to reading data/notes/ directly when Neo4j is unavailable.
+    """
+    try:
+        return note_manager.load_notes(note_type="lesson", symbol=symbol)
+    except Exception:
+        return []
+
+
+def _format_lesson_section(lessons: list[dict]) -> str:
+    """Format investment lessons as a markdown section for context injection."""
+    if not lessons:
+        return ""
+    lines = ["", "## 投資lesson"]
+    for les in lessons[:5]:
+        symbol_part = f"[{les.get('symbol')}] " if les.get("symbol") else ""
+        trigger = les.get("trigger", "")
+        expected = les.get("expected_action", "")
+        content = (les.get("content", "") or "")[:80]
+        if trigger and expected:
+            lines.append(f"- {symbol_part}{trigger} → {expected}")
+        elif trigger:
+            lines.append(f"- {symbol_part}トリガー: {trigger} / {content}")
+        elif expected:
+            lines.append(f"- {symbol_part}次回: {expected} / {content}")
+        else:
+            lines.append(f"- {symbol_part}{content}")
+        date_str = les.get("date", "")
+        if date_str:
+            lines[-1] += f" ({date_str})"
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -535,4 +575,16 @@ def get_context(user_input: str) -> Optional[dict]:
         }
 
     # KIK-420: Merge symbol context + vector results
-    return _merge_context(symbol_context, vector_results)
+    merged = _merge_context(symbol_context, vector_results)
+
+    # KIK-534: Append investment lesson section
+    if merged is not None:
+        try:
+            lessons = _load_lessons(symbol=symbol if symbol else None)
+            lesson_md = _format_lesson_section(lessons)
+            if lesson_md:
+                merged["context_markdown"] += lesson_md
+        except Exception:
+            pass  # graceful degradation
+
+    return merged

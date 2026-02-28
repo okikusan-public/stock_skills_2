@@ -211,12 +211,33 @@ def build_note_summary(
     note_type: str = "",
     content: str = "",
     category: str = "",
+    trigger: str = "",
+    expected_action: str = "",
 ) -> str:
     """Build summary for a Note node.
 
     Example: "7203.T thesis: EV普及で部品需要増"
     Example (no symbol): "[portfolio] review: PF全体の振り返り"
+    Example (lesson): "投資lesson: 高値掴みした → 次回はRSI確認してから買う"
     """
+    # KIK-534: lesson with trigger/expected_action gets a special format
+    if note_type == "lesson" and (trigger or expected_action):
+        parts = []
+        if symbol:
+            parts.append(symbol)
+        elif category and category != "stock":
+            parts.append(f"[{category}]")
+        parts.append("投資lesson:")
+        if trigger and expected_action:
+            parts.append(f"{trigger} → {expected_action}")
+        elif trigger:
+            parts.append(trigger)
+        elif expected_action:
+            parts.append(f"→ {expected_action}")
+        if content:
+            parts.append(content)
+        return _trunc(" ".join(parts))
+
     parts = []
     if symbol:
         parts.append(symbol)

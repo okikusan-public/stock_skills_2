@@ -30,6 +30,8 @@ def save_note(
     source: str = "",
     category: Optional[str] = None,
     base_dir: str = _NOTES_DIR,
+    trigger: Optional[str] = None,
+    expected_action: Optional[str] = None,
 ) -> dict:
     """Save a note to JSON file and Neo4j.
 
@@ -49,6 +51,10 @@ def save_note(
         Defaults to "general" when neither symbol nor category is given.
     base_dir : str
         Notes directory.
+    trigger : str, optional
+        What triggered this lesson (KIK-534). Only stored for type="lesson".
+    expected_action : str, optional
+        What action should be taken next time (KIK-534). Only stored for type="lesson".
 
     Returns
     -------
@@ -94,6 +100,13 @@ def save_note(
         "source": source,
     }
 
+    # KIK-534: lesson-specific fields
+    if note_type == "lesson":
+        if trigger:
+            note["trigger"] = trigger
+        if expected_action:
+            note["expected_action"] = expected_action
+
     # KIK-473: journal type auto-detects symbols from content
     detected_symbols: list[str] = []
     if note_type == "journal" and not symbol and content:
@@ -129,6 +142,8 @@ def save_note(
         from src.data.history_store import _build_embedding
         sem_summary, emb = _build_embedding(
             "note", symbol=symbol or "", note_type=note_type, content=content,
+            trigger=note.get("trigger", ""),
+            expected_action=note.get("expected_action", ""),
         )
         merge_note(
             note_id=note_id,

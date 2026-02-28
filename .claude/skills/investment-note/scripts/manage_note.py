@@ -21,18 +21,32 @@ def cmd_save(args):
         print("Error: --content は必須です。")
         sys.exit(1)
 
+    # KIK-534: lesson-specific fields
+    extra = {}
+    if args.type == "lesson":
+        if getattr(args, "trigger", None):
+            extra["trigger"] = args.trigger
+        if getattr(args, "expected_action", None):
+            extra["expected_action"] = args.expected_action
+
     note = save_note(
         symbol=args.symbol or None,
         note_type=args.type,
         content=args.content,
         source=args.source,
         category=args.category,
+        **extra,
     )
 
     label = note.get("symbol") or note.get("category", "general")
     print(f"メモを保存しました: {note['id']}")
     print(f"  対象: {label} / タイプ: {note['type']} / カテゴリ: {note.get('category', '-')}")
     print(f"  内容: {note['content']}")
+    # KIK-534: show lesson-specific fields
+    if note.get("trigger"):
+        print(f"  トリガー: {note['trigger']}")
+    if note.get("expected_action"):
+        print(f"  次回アクション: {note['expected_action']}")
     # KIK-473: show detected symbols for journal notes
     detected = note.get("detected_symbols", [])
     if detected:
@@ -111,6 +125,8 @@ def main():
     )
     p_save.add_argument("--content", required=True, help="メモ内容")
     p_save.add_argument("--source", default="manual", help="ソース (例: manual, health-check)")
+    p_save.add_argument("--trigger", default=None, help="lessonのトリガー (type=lesson時のみ有効, KIK-534)")
+    p_save.add_argument("--expected-action", default=None, help="次回期待アクション (type=lesson時のみ有効, KIK-534)")
     p_save.set_defaults(func=cmd_save)
 
     # list

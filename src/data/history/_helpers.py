@@ -100,7 +100,9 @@ def _build_embedding(category: str, **kwargs) -> tuple[str, list[float] | None]:
             kwargs.get("grok_research")),
         "note": lambda: summary_builder.build_note_summary(
             kwargs.get("symbol", ""), kwargs.get("note_type", ""),
-            kwargs.get("content", "")),
+            kwargs.get("content", ""),
+            trigger=kwargs.get("trigger", ""),
+            expected_action=kwargs.get("expected_action", "")),
         "watchlist": lambda: summary_builder.build_watchlist_summary(
             kwargs.get("name", ""), kwargs.get("symbols")),
         "stress_test": lambda: summary_builder.build_stress_test_summary(
