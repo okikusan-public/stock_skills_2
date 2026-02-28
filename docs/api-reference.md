@@ -202,6 +202,15 @@ Portfolio concentration analysis module.
 - `get_concentration_multiplier(hhi: float) -> float` — Derive a concentration multiplier from an HHI value.
 - `analyze_concentration(portfolio_data: list[dict], weights: list[float]) -> dict` — Perform multi-axis concentration analysis on a portfolio.
 
+### src.core.portfolio.fx_utils
+
+FX conversion utilities (KIK-511).
+
+- `fx_symbol_for_currency(currency: str) -> Optional[str]` — Return the yfinance FX pair symbol for converting *currency* to JPY.
+- `get_fx_rates(client) -> dict[str, float]` — Fetch major FX rates (per-unit JPY values) via yahoo_client.
+- `get_rate(currency: str, fx_rates: dict[str, float]) -> float` — Return the per-unit JPY rate for *currency*.
+- `convert_to_jpy(amount: float, currency: str, fx_rates: dict[str, float]) -> float` — Convert *amount* in *currency* to JPY.
+
 ### src.core.portfolio.market_regime (KIK-496: 市場レジーム検出)
 
 Market regime detection for adjustment advisor (KIK-496).
@@ -237,7 +246,6 @@ Portfolio management core logic (KIK-342).
 - `add_position(csv_path: str, symbol: str, shares: int, cost_price: float, cost_currency: str='JPY', purchase_date: Optional[str]=None, memo: str='') -> dict` — 新規ポジション追加 or 既存ポジションへの追加購入。
 - `sell_position(csv_path: str, symbol: str, shares: int, sell_price: Optional[float]=None, sell_date: Optional[str]=None) -> dict` — 売却。shares分を減算。0以下になったら行を削除。
 - `get_performance_review(year: Optional[int]=None, symbol: Optional[str]=None, base_dir: str='data/history') -> dict` — 売買パフォーマンスレビュー集計 (KIK-441)。
-- `get_fx_rates(client) -> dict` — 主要為替レートを取得。
 - `get_snapshot(csv_path: str, client) -> dict` — スナップショット生成。
 - `get_structure_analysis(csv_path: str, client) -> dict` — 構造分析。PFの偏りを自動集計。
 - `get_portfolio_shareholder_return(csv_path: str, client) -> dict` — Calculate weighted-average shareholder return for the portfolio.

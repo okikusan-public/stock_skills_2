@@ -11,8 +11,8 @@ import copy
 import os
 import tempfile
 
+from src.core.portfolio.fx_utils import get_fx_rates  # KIK-511
 from src.core.portfolio.portfolio_manager import (
-    get_fx_rates,
     get_snapshot,
     get_structure_analysis,
     load_portfolio,

@@ -11,6 +11,12 @@ from datetime import datetime
 from typing import Optional
 
 from src.core.common import is_cash as _is_cash
+from src.core.portfolio.fx_utils import (  # KIK-511
+    FX_PAIRS as _FX_PAIRS,
+    fx_symbol_for_currency as _fx_symbol_for_currency,
+    get_fx_rates,
+    get_rate as _get_fx_rate_for_currency,
+)
 from src.core.ticker_utils import (
     SUFFIX_TO_REGION as _SUFFIX_TO_COUNTRY,
     SUFFIX_TO_CURRENCY as _SUFFIX_TO_CURRENCY,
@@ -42,32 +48,7 @@ CSV_COLUMNS = [
     "memo",
 ]
 
-# FX pairs to fetch for JPY conversion
-_FX_PAIRS = [
-    "USDJPY=X",
-    "SGDJPY=X",
-    "THBJPY=X",
-    "MYRJPY=X",
-    "IDRJPY=X",
-    "PHPJPY=X",
-    "HKDJPY=X",
-    "KRWJPY=X",
-    "TWDJPY=X",
-    "CNYJPY=X",
-    "GBPJPY=X",
-    "EURJPY=X",
-    "CADJPY=X",
-    "AUDJPY=X",
-    "BRLJPY=X",
-    "INRJPY=X",
-]
-
-
-def _fx_symbol_for_currency(currency: str) -> Optional[str]:
-    """Return the yfinance FX pair symbol for converting currency to JPY."""
-    if currency == "JPY":
-        return None  # No conversion needed
-    return f"{currency}JPY=X"
+# FX pairs and helpers imported from fx_utils (KIK-511)
 
 
 # ---------------------------------------------------------------------------
@@ -382,52 +363,7 @@ def get_performance_review(
     }
 
 
-# ---------------------------------------------------------------------------
-# FX rate fetching
-# ---------------------------------------------------------------------------
-
-
-def get_fx_rates(client) -> dict:
-    """主要為替レートを取得。
-
-    yfinance で USDJPY=X 等を取得。JPYは1.0固定。
-    client は yahoo_client モジュール（get_stock_info を持つ）。
-
-    Returns
-    -------
-    dict
-        {"JPY": 1.0, "USD": 150.5, "SGD": 112.3, ...}
-        1通貨単位あたりの円。取得失敗した通貨は含まれない。
-    """
-    rates: dict[str, float] = {"JPY": 1.0}
-
-    for pair in _FX_PAIRS:
-        # pair format: "USDJPY=X" -> currency = "USD"
-        currency = pair.replace("JPY=X", "")
-        try:
-            info = client.get_stock_info(pair)
-            if info is not None and info.get("price") is not None:
-                rates[currency] = float(info["price"])
-            else:
-                print(f"[portfolio_manager] Warning: FX rate for {pair} unavailable")
-        except Exception as e:
-            print(f"[portfolio_manager] Warning: FX rate fetch error for {pair}: {e}")
-
-    return rates
-
-
-def _get_fx_rate_for_currency(
-    currency: str, fx_rates: dict[str, float]
-) -> float:
-    """指定通貨の対円レートを返す。見つからない場合は1.0（JPY扱い）。"""
-    if currency in fx_rates:
-        return fx_rates[currency]
-    # Fallback: JPY扱い
-    print(
-        f"[portfolio_manager] Warning: FX rate for {currency} not found, "
-        f"assuming 1.0 (JPY equivalent)"
-    )
-    return 1.0
+# get_fx_rates and _get_fx_rate_for_currency imported from fx_utils (KIK-511)
 
 
 # ---------------------------------------------------------------------------
