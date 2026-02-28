@@ -1,4 +1,4 @@
-"""Stock info and detail fetching (KIK-449)."""
+"""Stock info and detail fetching (KIK-449, KIK-531)."""
 
 import socket
 import time
@@ -13,6 +13,7 @@ from src.data.yahoo_client._cache import (
     _read_detail_cache,
     _write_detail_cache,
 )
+from src.data.yahoo_client._memory_cache import stock_detail_cache
 from src.data.yahoo_client._normalize import (
     _normalize_ratio,
     _safe_get,
@@ -216,15 +217,22 @@ def get_stock_detail(symbol: str) -> Optional[dict]:
     balance-sheet ratios, cash-flow, EPS growth, and debt/EBITDA figures.
 
     Returns a merged dict or None if the base data cannot be fetched.
+    Uses memory → file → API three-tier cache (KIK-531).
     """
+    # 0. Check in-memory cache first (KIK-531)
+    mem_cached = stock_detail_cache.get(symbol)
+    if mem_cached is not None:
+        return mem_cached
+
     # 1. Get base data first
     base = get_stock_info(symbol)
     if base is None:
         return None
 
-    # 2. Check detail cache
+    # 2. Check file-based detail cache
     cached = _read_detail_cache(symbol)
     if cached is not None:
+        stock_detail_cache.set(symbol, cached)
         return cached
 
     # 3. Fetch additional data from yfinance
@@ -476,8 +484,9 @@ def get_stock_detail(symbol: str) -> Optional[dict]:
             "fund_family": fund_family,
         })
 
-        # 5. Cache the result
+        # 5. Cache the result (file + memory)
         _write_detail_cache(symbol, result)
+        stock_detail_cache.set(symbol, result)
         return result
 
     except (TimeoutError, socket.timeout) as e:

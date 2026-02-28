@@ -124,3 +124,7 @@ def _block_external_io(request, monkeypatch):
 
     # Grok: ensure no API key → functions return EMPTY_* immediately
     monkeypatch.delenv("XAI_API_KEY", raising=False)
+
+    # In-memory cache: clear between tests to prevent cross-test leaks (KIK-531)
+    from src.data.yahoo_client._memory_cache import clear_memory_cache
+    clear_memory_cache()

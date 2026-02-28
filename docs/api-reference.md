@@ -500,7 +500,7 @@ Contrarian signal: detect oversold stocks with solid fundamentals (KIK-504, KIK-
 
 ### src.core.screening.contrarian_screener (KIK-504/533: ヘルスチェック連動)
 
-ContrarianScreener: oversold-but-solid screening pipeline (KIK-504, KIK-533, KIK-530).
+ContrarianScreener: oversold-but-solid screening pipeline (KIK-504, KIK-533, KIK-530, KIK-531).
 
 
 #### class ContrarianScreener
@@ -1002,6 +1002,20 @@ Backward-compatible shim (KIK-517). Real module: src.data.context.summary_builde
 Cache helpers for yahoo_client (KIK-449).
 
 
+### src.data.yahoo_client._memory_cache
+
+Thread-safe in-memory LRU cache with TTL (KIK-531).
+
+- `clear_memory_cache() -> None` — Clear both singleton caches (useful for tests).
+
+#### class MemoryCache
+Thread-safe in-memory LRU cache with TTL.
+
+- `get(key: str) -> Optional[Any]` — Return cached value or None if missing / expired.
+- `set(key: str, value: Any) -> None` — Store *value* under *key* with current TTL.
+- `clear() -> None` — Drop all entries and reset stats.
+- `stats() -> dict` — Return hit/miss/size statistics.
+
 ### src.data.yahoo_client._normalize
 
 Internal normalization and sanitization utilities (KIK-449).
@@ -1009,7 +1023,7 @@ Internal normalization and sanitization utilities (KIK-449).
 
 ### src.data.yahoo_client.detail
 
-Stock info and detail fetching (KIK-449).
+Stock info and detail fetching (KIK-449, KIK-531).
 
 - `get_stock_info(symbol: str) -> Optional[dict]` — Fetch basic stock information for a single symbol.
 - `get_multiple_stocks(symbols: list[str]) -> dict[str, Optional[dict]]` — Fetch stock info for multiple symbols with a 1-second delay between requests.
@@ -1017,7 +1031,7 @@ Stock info and detail fetching (KIK-449).
 
 ### src.data.yahoo_client.history
 
-Price history and news fetching (KIK-449).
+Price history and news fetching (KIK-449, KIK-531).
 
 - `get_price_history(symbol: str, period: str='1y') -> Optional[pd.DataFrame]` — Fetch price history for technical analysis.
 - `get_stock_news(symbol: str, count: int=10) -> list[dict]` — Fetch recent news for a stock symbol.

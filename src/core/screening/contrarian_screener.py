@@ -1,15 +1,40 @@
-"""ContrarianScreener: oversold-but-solid screening pipeline (KIK-504, KIK-533, KIK-530)."""
+"""ContrarianScreener: oversold-but-solid screening pipeline (KIK-504, KIK-533, KIK-530, KIK-531)."""
 
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
+from src.core._thresholds import th
 from src.core.screening.contrarian import compute_contrarian_score
 from src.core.screening.indicators import calculate_value_score
 from src.core.screening.query_builder import build_query
 from src.core.screening.query_screener import QueryScreener
 
 _MAX_WORKERS = int(os.environ.get("SCREEN_MAX_WORKERS", "5"))
+
+
+def _pre_filter_contrarian(raw_quotes: list[dict]) -> list[dict]:
+    """Pre-filter candidates using EquityQuery raw fields (KIK-531).
+
+    Skip stocks that are clearly NOT contrarian based on cheap-to-evaluate
+    fields already present in the EquityQuery response, before the expensive
+    per-stock API calls in Step 2.
+    """
+    fifty_day_max = th("contrarian", "prefilter_fifty_day_max", 0.05)
+    fifty_two_wk_min = th("contrarian", "prefilter_52wk_high_min", -0.05)
+
+    filtered: list[dict] = []
+    for quote in raw_quotes:
+        fifty_day_chg = quote.get("fiftyDayAverageChangePercent")
+        fifty_two_wk_chg = quote.get("fiftyTwoWeekHighChangePercent")
+        # Skip stocks that are RISING strongly (not contrarian)
+        if fifty_day_chg is not None and fifty_day_chg > fifty_day_max:
+            continue
+        # Skip stocks near 52-week high (not oversold)
+        if fifty_two_wk_chg is not None and fifty_two_wk_chg > fifty_two_wk_min:
+            continue
+        filtered.append(quote)
+    return filtered
 
 
 class ContrarianScreener:
@@ -104,6 +129,11 @@ class ContrarianScreener:
             sort_asc=False,
         )
 
+        if not raw_quotes:
+            return []
+
+        # Step 1.5: Pre-filter using EquityQuery raw fields (KIK-531)
+        raw_quotes = _pre_filter_contrarian(raw_quotes)
         if not raw_quotes:
             return []
 

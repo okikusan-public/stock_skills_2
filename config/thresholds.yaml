@@ -38,6 +38,16 @@ estimate:
 # ---------------------------------------------------------------------------
 # Technicals / pullback screening (src/core/screening/technicals.py)
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Contrarian screener (src/core/screening/contrarian_screener.py)
+# ---------------------------------------------------------------------------
+contrarian:
+  prefilter_fifty_day_max: 0.05    # Skip stocks with 50-day avg change > +5%
+  prefilter_52wk_high_min: -0.05   # Skip stocks within 5% of 52-week high
+
+# ---------------------------------------------------------------------------
+# Technicals / pullback screening (src/core/screening/technicals.py)
+# ---------------------------------------------------------------------------
 technicals:
   pullback_min: -0.20              # Pullback lower bound (from recent high)
   pullback_max: -0.05              # Pullback upper bound

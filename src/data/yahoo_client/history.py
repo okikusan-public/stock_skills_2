@@ -1,4 +1,4 @@
-"""Price history and news fetching (KIK-449)."""
+"""Price history and news fetching (KIK-449, KIK-531)."""
 
 import socket
 import time
@@ -8,6 +8,8 @@ from typing import Optional
 import pandas as pd
 import yfinance as yf
 
+from src.data.yahoo_client._memory_cache import price_history_cache
+
 
 def get_price_history(symbol: str, period: str = "1y") -> Optional[pd.DataFrame]:
     """Fetch price history for technical analysis.
@@ -15,9 +17,14 @@ def get_price_history(symbol: str, period: str = "1y") -> Optional[pd.DataFrame]
     Returns a pandas DataFrame with columns: Open, High, Low, Close, Volume.
     Returns None on error.
 
-    No caching is applied because technical analysis requires the latest data.
-    A 1-second sleep is used for rate-limit compliance.
+    Uses in-memory cache (default 5 min TTL) to avoid redundant API calls
+    within a screening session (KIK-531).
     """
+    cache_key = f"{symbol}:{period}"
+    cached = price_history_cache.get(cache_key)
+    if cached is not None:
+        return cached.copy()
+
     try:
         time.sleep(1)  # rate-limit
         ticker = yf.Ticker(symbol)
@@ -31,7 +38,9 @@ def get_price_history(symbol: str, period: str = "1y") -> Optional[pd.DataFrame]
         if "Close" not in available_cols:
             print(f"[yahoo_client] No 'Close' column in history for {symbol}")
             return None
-        return hist[available_cols]
+        result = hist[available_cols]
+        price_history_cache.set(cache_key, result)
+        return result
     except (TimeoutError, socket.timeout) as e:
         print(
             f"⚠️  Yahoo Financeへの接続がタイムアウトしました ({symbol})\n"

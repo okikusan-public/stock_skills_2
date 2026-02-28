@@ -51,6 +51,9 @@ from src.data.yahoo_client.history import (  # noqa: F401
     get_stock_news,
 )
 
+# -- In-memory cache management (KIK-531) --
+from src.data.yahoo_client._memory_cache import clear_memory_cache  # noqa: F401
+
 # -- Macro indicators --
 from src.data.yahoo_client.macro import (  # noqa: F401
     MACRO_TICKERS,
@@ -71,4 +74,5 @@ __all__ = [
     "get_price_history",
     "get_stock_news",
     "get_macro_indicators",
+    "clear_memory_cache",
 ]
