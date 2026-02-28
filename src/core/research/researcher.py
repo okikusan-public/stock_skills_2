@@ -2,12 +2,22 @@
 
 Integrates yfinance quantitative data with Grok API qualitative data
 (X posts, web search) to produce multi-faceted research reports.
+
+KIK-513: Functions accept an optional ``research_client`` parameter
+(ResearchClient Protocol) for dependency injection. When omitted, the module
+falls back to importing grok_client directly (backward compatible).
 """
 
+from __future__ import annotations
+
 import sys
+from typing import TYPE_CHECKING
 
 from src.core.ports.market_data import StockInfoProvider
 from src.core.screening.indicators import calculate_value_score
+
+if TYPE_CHECKING:
+    from src.core.ports.research import ResearchClient
 
 # Grok API: graceful degradation when module is unavailable
 try:
@@ -28,13 +38,19 @@ except ImportError:
 _grok_warned = [False]
 
 
-def _grok_available() -> bool:
-    """Return True if grok_client is importable and API key is set."""
+def _grok_available(research_client: ResearchClient | None = None) -> bool:
+    """Return True if grok_client (or injected client) is available."""
+    if research_client is not None:
+        return research_client.is_available()
     return HAS_GROK and grok_client.is_available()
 
 
-def _get_grok_api_status() -> dict:
+def _get_grok_api_status(research_client: ResearchClient | None = None) -> dict:
     """Return the Grok API status after calls (KIK-431)."""
+    if research_client is not None:
+        if not research_client.is_available():
+            return {"grok": {"status": "not_configured", "status_code": None, "message": ""}}
+        return {"grok": research_client.get_error_status()}
     if not HAS_GROK or not grok_client.is_available():
         return {"grok": {"status": "not_configured", "status_code": None, "message": ""}}
     return {"grok": grok_client.get_error_status()}
@@ -137,7 +153,12 @@ def _empty_business() -> dict:
     }
 
 
-def research_stock(symbol: str, yahoo_client_module: StockInfoProvider) -> dict:
+def research_stock(
+    symbol: str,
+    yahoo_client_module: StockInfoProvider,
+    *,
+    research_client: ResearchClient | None = None,
+) -> dict:
     """Run comprehensive stock research combining yfinance and Grok API.
 
     Parameters
@@ -147,6 +168,9 @@ def research_stock(symbol: str, yahoo_client_module: StockInfoProvider) -> dict:
     yahoo_client_module : StockInfoProvider
         The yahoo_client module (enables mock injection in tests).
         Any object satisfying ``StockInfoProvider`` (KIK-516).
+    research_client : ResearchClient, optional
+        Optional dependency-injected research client (KIK-513 DIP).
+        When None, falls back to importing grok_client directly.
 
     Returns
     -------
@@ -154,6 +178,11 @@ def research_stock(symbol: str, yahoo_client_module: StockInfoProvider) -> dict:
         Integrated research data with fundamentals, value score,
         Grok deep research, X sentiment, and news.
     """
+    # Resolve the research client: injected > module-level grok_client
+    _client = research_client
+    if _client is None and HAS_GROK:
+        _client = grok_client  # type: ignore[assignment]
+
     # 1. Fetch base data via yahoo_client
     info = yahoo_client_module.get_stock_info(symbol)
     if info is None:
@@ -169,7 +198,7 @@ def research_stock(symbol: str, yahoo_client_module: StockInfoProvider) -> dict:
     grok_research = _empty_stock_deep()
     x_sentiment = _empty_sentiment()
 
-    if _grok_available():
+    if _grok_available(_client):
         # KIK-488: inject Neo4j knowledge context into Grok prompts
         stock_ctx = ""
         if HAS_GROK_CONTEXT:
@@ -179,14 +208,14 @@ def research_stock(symbol: str, yahoo_client_module: StockInfoProvider) -> dict:
                 pass
 
         deep = _safe_grok_call(
-            grok_client.search_stock_deep, symbol, company_name,
+            _client.search_stock_deep, symbol, company_name,
             context=stock_ctx,
         )
         if deep is not None:
             grok_research = deep
 
         sent = _safe_grok_call(
-            grok_client.search_x_sentiment, symbol, company_name,
+            _client.search_x_sentiment, symbol, company_name,
             context=stock_ctx,
         )
         if sent is not None:
@@ -209,17 +238,24 @@ def research_stock(symbol: str, yahoo_client_module: StockInfoProvider) -> dict:
         "grok_research": grok_research,
         "x_sentiment": x_sentiment,
         "news": news,
-        "api_status": _get_grok_api_status(),
+        "api_status": _get_grok_api_status(_client),
     }
 
 
-def research_industry(theme: str) -> dict:
+def research_industry(
+    theme: str,
+    *,
+    research_client: ResearchClient | None = None,
+) -> dict:
     """Run industry/theme research via Grok API.
 
     Parameters
     ----------
     theme : str
         Industry name or theme (e.g. "semiconductor", "EV", "AI").
+    research_client : ResearchClient, optional
+        Optional dependency-injected research client (KIK-513 DIP).
+        When None, falls back to importing grok_client directly.
 
     Returns
     -------
@@ -227,9 +263,13 @@ def research_industry(theme: str) -> dict:
         Industry research data. ``api_unavailable`` is True when
         Grok is unavailable.
     """
+    _client = research_client
+    if _client is None and HAS_GROK:
+        _client = grok_client  # type: ignore[assignment]
+
     grok_result = _empty_industry()
     grok_available = False
-    if _grok_available():
+    if _grok_available(_client):
         grok_available = True
         # KIK-488: inject Neo4j knowledge context into Grok prompts
         industry_ctx = ""
@@ -239,7 +279,7 @@ def research_industry(theme: str) -> dict:
             except Exception:
                 pass
         result = _safe_grok_call(
-            grok_client.search_industry, theme, context=industry_ctx,
+            _client.search_industry, theme, context=industry_ctx,
         )
         if result is not None:
             grok_result = result
@@ -249,11 +289,16 @@ def research_industry(theme: str) -> dict:
         "type": "industry",
         "grok_research": grok_result,
         "api_unavailable": not grok_available,
-        "api_status": _get_grok_api_status(),
+        "api_status": _get_grok_api_status(_client),
     }
 
 
-def research_market(market: str, yahoo_client_module=None) -> dict:
+def research_market(
+    market: str,
+    yahoo_client_module=None,
+    *,
+    research_client: ResearchClient | None = None,
+) -> dict:
     """Run market overview research via yfinance + Grok.
 
     Parameters
@@ -263,6 +308,9 @@ def research_market(market: str, yahoo_client_module=None) -> dict:
     yahoo_client_module : module, optional
         The yahoo_client module for macro indicators (enables mock injection).
         When ``None``, macro_indicators will be empty (backward compatible).
+    research_client : ResearchClient, optional
+        Optional dependency-injected research client (KIK-513 DIP).
+        When None, falls back to importing grok_client directly.
 
     Returns
     -------
@@ -270,6 +318,10 @@ def research_market(market: str, yahoo_client_module=None) -> dict:
         Market research data with ``macro_indicators`` (Layer 1, always)
         and ``grok_research`` (Layer 2).
     """
+    _client = research_client
+    if _client is None and HAS_GROK:
+        _client = grok_client  # type: ignore[assignment]
+
     # Layer 1: yfinance quantitative (always available)
     macro_indicators: list[dict] = []
     if yahoo_client_module and hasattr(yahoo_client_module, "get_macro_indicators"):
@@ -281,7 +333,7 @@ def research_market(market: str, yahoo_client_module=None) -> dict:
     # Layer 2: Grok qualitative (when API key is set)
     grok_research = _empty_market()
     grok_available = False
-    if _grok_available():
+    if _grok_available(_client):
         grok_available = True
         # KIK-488: inject Neo4j knowledge context into Grok prompts
         market_ctx = ""
@@ -291,7 +343,7 @@ def research_market(market: str, yahoo_client_module=None) -> dict:
             except Exception:
                 pass
         result = _safe_grok_call(
-            grok_client.search_market, market, context=market_ctx,
+            _client.search_market, market, context=market_ctx,
         )
         if result is not None:
             grok_research = result
@@ -302,11 +354,16 @@ def research_market(market: str, yahoo_client_module=None) -> dict:
         "macro_indicators": macro_indicators,
         "grok_research": grok_research,
         "api_unavailable": not grok_available,
-        "api_status": _get_grok_api_status(),
+        "api_status": _get_grok_api_status(_client),
     }
 
 
-def research_business(symbol: str, yahoo_client_module: StockInfoProvider) -> dict:
+def research_business(
+    symbol: str,
+    yahoo_client_module: StockInfoProvider,
+    *,
+    research_client: ResearchClient | None = None,
+) -> dict:
     """Run business model research combining yfinance and Grok.
 
     Parameters
@@ -316,6 +373,9 @@ def research_business(symbol: str, yahoo_client_module: StockInfoProvider) -> di
     yahoo_client_module : StockInfoProvider
         The yahoo_client module (enables mock injection in tests).
         Any object satisfying ``StockInfoProvider`` (KIK-516).
+    research_client : ResearchClient, optional
+        Optional dependency-injected research client (KIK-513 DIP).
+        When None, falls back to importing grok_client directly.
 
     Returns
     -------
@@ -323,6 +383,10 @@ def research_business(symbol: str, yahoo_client_module: StockInfoProvider) -> di
         Business model research data. ``api_unavailable`` is True when
         Grok is unavailable.
     """
+    _client = research_client
+    if _client is None and HAS_GROK:
+        _client = grok_client  # type: ignore[assignment]
+
     # Fetch company name from yfinance for prompt enrichment
     info = yahoo_client_module.get_stock_info(symbol)
     if info is None:
@@ -331,7 +395,7 @@ def research_business(symbol: str, yahoo_client_module: StockInfoProvider) -> di
 
     grok_result = _empty_business()
     grok_available = False
-    if _grok_available():
+    if _grok_available(_client):
         grok_available = True
         # KIK-488: inject Neo4j knowledge context into Grok prompts
         biz_ctx = ""
@@ -341,7 +405,7 @@ def research_business(symbol: str, yahoo_client_module: StockInfoProvider) -> di
             except Exception:
                 pass
         result = _safe_grok_call(
-            grok_client.search_business, symbol, company_name,
+            _client.search_business, symbol, company_name,
             context=biz_ctx,
         )
         if result is not None:
@@ -353,5 +417,5 @@ def research_business(symbol: str, yahoo_client_module: StockInfoProvider) -> di
         "type": "business",
         "grok_research": grok_result,
         "api_unavailable": not grok_available,
-        "api_status": _get_grok_api_status(),
+        "api_status": _get_grok_api_status(_client),
     }

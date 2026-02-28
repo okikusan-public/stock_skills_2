@@ -1,15 +1,27 @@
 """Action item bridge: detect -> dedup -> Linear create -> Neo4j save (KIK-472).
 
 Orchestrates the full action item pipeline. Graceful degradation on any failure.
+
+KIK-513: process_action_items() accepts optional ``graph_writer`` (GraphWriter
+Protocol) for dependency injection. When omitted, falls back to importing
+graph_store functions directly (backward compatible).
 """
 
+from __future__ import annotations
+
 from datetime import date
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.core.ports.graph import GraphWriter
 
 
 def process_action_items(
     suggestions: list[dict],
     health_data: dict | None = None,
     context: dict | None = None,
+    *,
+    graph_writer: GraphWriter | None = None,
 ) -> list[dict]:
     """Full pipeline: detect -> dedup -> create Linear issues -> save Neo4j.
 
@@ -17,6 +29,8 @@ def process_action_items(
         suggestions: Output from proactive_engine.get_suggestions().
         health_data: Output from health_check.run_health_check() (optional).
         context: Graph context dict (optional).
+        graph_writer: Optional GraphWriter Protocol instance (KIK-513 DIP).
+            When None, falls back to importing graph_store functions directly.
 
     Returns:
         List of created action items with results:
@@ -63,7 +77,7 @@ def process_action_items(
             }
 
             # 1. Dedup check via Neo4j
-            if _is_duplicate_neo4j(action_id):
+            if _is_duplicate_neo4j(action_id, graph_writer=graph_writer):
                 continue
 
             # 2. Save to Neo4j (with TRIGGERED relationship from HealthCheck)
@@ -75,6 +89,7 @@ def process_action_items(
                 symbol=symbol,
                 urgency=urgency,
                 source_node_id=source_node_id,
+                graph_writer=graph_writer,
             )
             result_entry["neo4j_saved"] = neo4j_saved
 
@@ -88,7 +103,7 @@ def process_action_items(
             if linear_result:
                 result_entry["linear_issue"] = linear_result
                 # 4. Link Linear issue ID back to Neo4j node
-                _link_linear_to_neo4j(action_id, linear_result)
+                _link_linear_to_neo4j(action_id, linear_result, graph_writer=graph_writer)
 
             results.append(result_entry)
         except Exception:
@@ -97,11 +112,18 @@ def process_action_items(
     return results
 
 
-def _is_duplicate_neo4j(action_id: str) -> bool:
+def _is_duplicate_neo4j(
+    action_id: str,
+    *,
+    graph_writer: GraphWriter | None = None,
+) -> bool:
     """Check if an action item with this ID already exists and is open."""
     try:
-        from src.data.graph_store import get_open_action_items
-        existing = get_open_action_items()
+        if graph_writer is not None:
+            existing = graph_writer.get_open_action_items()  # type: ignore[attr-defined]
+        else:
+            from src.data.graph_store import get_open_action_items
+            existing = get_open_action_items()
         return any(item.get("id") == action_id for item in existing)
     except Exception:
         return False
@@ -115,9 +137,21 @@ def _save_to_neo4j(
     symbol: str,
     urgency: str,
     source_node_id: str | None = None,
+    *,
+    graph_writer: GraphWriter | None = None,
 ) -> bool:
     """Save action item to Neo4j with optional TRIGGERED relationship (KIK-489)."""
     try:
+        if graph_writer is not None:
+            return graph_writer.merge_action_item(
+                action_id=action_id,
+                action_date=action_date,
+                trigger_type=trigger_type,
+                title=title,
+                symbol=symbol,
+                urgency=urgency,
+                source_node_id=source_node_id,
+            )
         from src.data.graph_store import merge_action_item
         return merge_action_item(
             action_id=action_id,
@@ -152,9 +186,22 @@ def _create_linear_issue(
         return None
 
 
-def _link_linear_to_neo4j(action_id: str, linear_result: dict) -> None:
+def _link_linear_to_neo4j(
+    action_id: str,
+    linear_result: dict,
+    *,
+    graph_writer: GraphWriter | None = None,
+) -> None:
     """Link Linear issue back to the Neo4j ActionItem node."""
     try:
+        if graph_writer is not None:
+            graph_writer.update_action_item_linear(
+                action_id=action_id,
+                linear_issue_id=linear_result.get("id", ""),
+                linear_issue_url=linear_result.get("url", ""),
+                linear_identifier=linear_result.get("identifier", ""),
+            )
+            return
         from src.data.graph_store import update_action_item_linear
         update_action_item_linear(
             action_id=action_id,

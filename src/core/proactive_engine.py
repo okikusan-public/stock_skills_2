@@ -8,9 +8,19 @@ Trigger categories:
   State:       recurring screening picks, concern notes, held stock w/ new report
   Contextual:  research sector matches held stocks
   Context:     execution result keyword matching (KIK-465)
+
+KIK-513: ProactiveEngine accepts an optional ``graph_reader`` parameter
+(GraphReader Protocol) for dependency injection. When omitted, falls back to
+importing graph_query functions directly (backward compatible).
 """
 
+from __future__ import annotations
+
 from datetime import date
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.core.ports.graph import GraphReader
 
 _THESIS_REVIEW_DAYS = 90   # thesis note older than this → suggest review
 _HEALTH_STALE_DAYS  = 14   # no health check for N days → suggest check
@@ -69,7 +79,14 @@ _CONTEXT_PATTERNS: dict[str, dict] = {
 
 
 class ProactiveEngine:
-    """Generate proactive next-action suggestions from the knowledge graph."""
+    """Generate proactive next-action suggestions from the knowledge graph.
+
+    KIK-513: Accepts an optional ``graph_reader`` (GraphReader Protocol).
+    When not provided, imports from src.data.graph_query directly (backward compatible).
+    """
+
+    def __init__(self, graph_reader: GraphReader | None = None) -> None:
+        self._graph_reader = graph_reader
 
     def get_suggestions(
         self,
@@ -108,8 +125,11 @@ class ProactiveEngine:
 
         # Health check staleness
         try:
-            from src.data.graph_query import get_last_health_check_date
-            last_hc = get_last_health_check_date()
+            if self._graph_reader is not None:
+                last_hc = self._graph_reader.get_last_health_check_date()
+            else:
+                from src.data.graph_query import get_last_health_check_date
+                last_hc = get_last_health_check_date()
             if last_hc is None:
                 out.append({
                     "emoji": "📋",
@@ -133,8 +153,11 @@ class ProactiveEngine:
 
         # Old thesis notes
         try:
-            from src.data.graph_query import get_old_thesis_notes
-            old_theses = get_old_thesis_notes(older_than_days=_THESIS_REVIEW_DAYS)
+            if self._graph_reader is not None:
+                old_theses = self._graph_reader.get_old_thesis_notes(older_than_days=_THESIS_REVIEW_DAYS)
+            else:
+                from src.data.graph_query import get_old_thesis_notes
+                old_theses = get_old_thesis_notes(older_than_days=_THESIS_REVIEW_DAYS)
             for note in old_theses[:1]:
                 sym = note.get("symbol") or "保有銘柄"
                 days = note.get("days_old", _THESIS_REVIEW_DAYS)
@@ -153,8 +176,11 @@ class ProactiveEngine:
 
         # Upcoming earnings events
         try:
-            from src.data.graph_query import get_upcoming_events
-            events = get_upcoming_events(within_days=_EARNINGS_WARN_DAYS)
+            if self._graph_reader is not None:
+                events = self._graph_reader.get_upcoming_events(within_days=_EARNINGS_WARN_DAYS)
+            else:
+                from src.data.graph_query import get_upcoming_events
+                events = get_upcoming_events(within_days=_EARNINGS_WARN_DAYS)
             for ev in events[:1]:
                 ev_date = ev.get("date", "")
                 ev_text = str(ev.get("text", ""))[:60]
@@ -179,8 +205,11 @@ class ProactiveEngine:
 
         # Recurring screening picks
         try:
-            from src.data.graph_query import get_recurring_picks
-            picks = get_recurring_picks(min_count=_RECURRING_MIN)
+            if self._graph_reader is not None:
+                picks = self._graph_reader.get_recurring_picks(min_count=_RECURRING_MIN)
+            else:
+                from src.data.graph_query import get_recurring_picks
+                picks = get_recurring_picks(min_count=_RECURRING_MIN)
             for pick in picks[:1]:
                 sym = pick.get("symbol", "")
                 cnt = pick.get("count", _RECURRING_MIN)
@@ -196,8 +225,11 @@ class ProactiveEngine:
 
         # Concern notes
         try:
-            from src.data.graph_query import get_concern_notes
-            concerns = get_concern_notes(limit=1)
+            if self._graph_reader is not None:
+                concerns = self._graph_reader.get_concern_notes(limit=1)
+            else:
+                from src.data.graph_query import get_concern_notes
+                concerns = get_concern_notes(limit=1)
             for c in concerns:
                 sym = c.get("symbol") or ""
                 days = c.get("days_old", 0)
@@ -226,11 +258,17 @@ class ProactiveEngine:
         if not sector:
             return out
         try:
-            from src.data.graph_query import get_current_holdings, get_industry_research_for_linking
-            research = get_industry_research_for_linking(sector, days=14, limit=1)
-            if not research:
-                return out
-            holdings = get_current_holdings()
+            if self._graph_reader is not None:
+                research = self._graph_reader.get_industry_research_for_linking(sector, days=14, limit=1)
+                if not research:
+                    return out
+                holdings = self._graph_reader.get_current_holdings()
+            else:
+                from src.data.graph_query import get_current_holdings, get_industry_research_for_linking
+                research = get_industry_research_for_linking(sector, days=14, limit=1)
+                if not research:
+                    return out
+                holdings = get_current_holdings()
             held_sectors = {h.get("sector", "") for h in holdings}
             if sector in held_sectors:
                 out.append({
@@ -274,9 +312,18 @@ def get_suggestions(
     context: str = "",
     symbol: str = "",
     sector: str = "",
+    *,
+    graph_reader: GraphReader | None = None,
 ) -> list[dict]:
-    """Return proactive suggestions from the knowledge graph (KIK-435)."""
-    return ProactiveEngine().get_suggestions(
+    """Return proactive suggestions from the knowledge graph (KIK-435).
+
+    Parameters
+    ----------
+    graph_reader : GraphReader, optional
+        Optional dependency-injected graph reader (KIK-513 DIP).
+        When None, falls back to importing graph_query functions directly.
+    """
+    return ProactiveEngine(graph_reader=graph_reader).get_suggestions(
         context=context, symbol=symbol, sector=sector
     )
 

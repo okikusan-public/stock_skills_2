@@ -1,16 +1,28 @@
-"""ISP-compliant Protocol interfaces for grok_client roles (KIK-516).
+"""Protocol interfaces for grok_client (KIK-513 DIP + KIK-516 ISP).
 
-Each Protocol covers exactly one responsibility so that callers only
-depend on the slice of the interface they actually use.
+ISP-split (KIK-516) — narrow, role-specific interfaces:
+  ResearchSearcher      — search_stock_deep, search_x_sentiment, search_industry,
+                          search_market, search_business
+  TrendingSearcher      — search_trending_stocks, get_trending_themes
+  TextSynthesizer       — synthesize_text
+  GrokAvailability      — is_available, get_error_status
+
+DIP composite (KIK-513) — broad interface for dependency injection:
+  ResearchClient        — is_available + get_error_status + all search methods
 
 Structural compatibility:
-  The ``src.data.grok_client`` module satisfies all four Protocols
+  The ``src.data.grok_client`` module satisfies all Protocols
   without any modifications — these are additive type annotations only.
 """
 
 from __future__ import annotations
 
 from typing import Optional, Protocol, runtime_checkable
+
+
+# ---------------------------------------------------------------------------
+# ISP-split Protocols (KIK-516)
+# ---------------------------------------------------------------------------
 
 
 @runtime_checkable
@@ -253,4 +265,76 @@ class GrokAvailability(Protocol):
         dict
             Keys: status (str), status_code (int | None), message (str).
         """
+        ...
+
+
+# ---------------------------------------------------------------------------
+# DIP composite Protocol (KIK-513)
+# ---------------------------------------------------------------------------
+
+
+@runtime_checkable
+class ResearchClient(Protocol):
+    """Broad interface for dependency injection of grok_client (KIK-513).
+
+    Combines GrokAvailability + ResearchSearcher into a single Protocol
+    for callers that need the full research API surface.
+
+    Implemented by: src.data.grok_client
+    """
+
+    def is_available(self) -> bool:
+        """Return True if the client is configured and ready to use."""
+        ...
+
+    def get_error_status(self) -> dict:
+        """Return the current API error status dict."""
+        ...
+
+    def search_stock_deep(
+        self,
+        symbol: str,
+        company_name: str = "",
+        timeout: int = 30,
+        context: str = "",
+    ) -> dict:
+        """Run deep research for a single stock."""
+        ...
+
+    def search_x_sentiment(
+        self,
+        symbol: str,
+        company_name: str = "",
+        timeout: int = 30,
+        context: str = "",
+    ) -> dict:
+        """Fetch X (Twitter) sentiment for *symbol*."""
+        ...
+
+    def search_industry(
+        self,
+        industry_or_theme: str,
+        timeout: int = 30,
+        context: str = "",
+    ) -> dict:
+        """Run industry/theme research."""
+        ...
+
+    def search_market(
+        self,
+        market_or_index: str,
+        timeout: int = 30,
+        context: str = "",
+    ) -> dict:
+        """Run market overview research."""
+        ...
+
+    def search_business(
+        self,
+        symbol: str,
+        company_name: str = "",
+        timeout: int = 60,
+        context: str = "",
+    ) -> dict:
+        """Run business model research for *symbol*."""
         ...

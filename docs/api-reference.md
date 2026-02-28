@@ -15,7 +15,7 @@ Centralised threshold loader (KIK-446).
 
 Action item bridge: detect -> dedup -> Linear create -> Neo4j save (KIK-472).
 
-- `process_action_items(suggestions: list[dict], health_data: dict | None=None, context: dict | None=None) -> list[dict]` — Full pipeline: detect -> dedup -> create Linear issues -> save Neo4j.
+- `process_action_items(suggestions: list[dict], health_data: dict | None=None, context: dict | None=None, *, graph_writer: GraphWriter | None=None) -> list[dict]` — Full pipeline: detect -> dedup -> create Linear issues -> save Neo4j.
 
 ### src.core.action_item_detector (KIK-472: Linear連携)
 
@@ -273,6 +273,29 @@ Small-cap classification and allocation rules (KIK-438).
 - `classify_market_cap(market_cap: float | None, region_code: str) -> str` — Classify stock size from market cap and region code.
 - `check_small_cap_allocation(small_cap_weight: float) -> dict` — Check portfolio-level small-cap allocation.
 
+### src.core.ports.graph
+
+Graph port interfaces for Neo4j graph store abstraction (KIK-513).
+
+
+#### class GraphReader
+Read-only access to the investment knowledge graph.
+
+- `get_last_health_check_date() -> str | None` — Return the ISO date string of the most recent health check, or None.
+- `get_old_thesis_notes(older_than_days: int=90) -> list[dict]` — Return thesis notes older than *older_than_days* days.
+- `get_upcoming_events(within_days: int=7) -> list[dict]` — Return upcoming events within *within_days* days.
+- `get_recurring_picks(min_count: int=3) -> list[dict]` — Return stocks that appear in screenings >= *min_count* times.
+- `get_concern_notes(limit: int=5) -> list[dict]` — Return the most recent concern-type investment notes.
+- `get_current_holdings() -> list[dict]` — Return current portfolio holdings from the graph.
+- `get_industry_research_for_linking(sector: str, days: int=14, limit: int=1) -> list[dict]` — Return recent industry research nodes matching *sector*.
+- `get_open_action_items() -> list[dict]` — Return open/pending action items from the graph.
+
+#### class GraphWriter
+Write operations for the investment knowledge graph.
+
+- `merge_action_item(*, action_id: str, action_date: str, trigger_type: str, title: str, symbol: str, urgency: str, source_node_id: str | None=None) -> bool` — Create or update an ActionItem node. Returns True on success.
+- `update_action_item_linear(*, action_id: str, linear_issue_id: str, linear_issue_url: str, linear_identifier: str) -> None` — Link an ActionItem node to its Linear issue.
+
 ### src.core.ports.market_data
 
 ISP-compliant Protocol interfaces for yahoo_client roles (KIK-516).
@@ -303,7 +326,7 @@ Provides macro-economic indicator data.
 
 ### src.core.ports.research
 
-ISP-compliant Protocol interfaces for grok_client roles (KIK-516).
+Protocol interfaces for grok_client (KIK-513 DIP + KIK-516 ISP).
 
 
 #### class ResearchSearcher
@@ -332,11 +355,41 @@ Reports API availability and error state (KIK-431).
 - `is_available() -> bool` — Return True when the API key is configured and no fatal error.
 - `get_error_status() -> dict` — Return the current error state dict.
 
+#### class ResearchClient
+Broad interface for dependency injection of grok_client (KIK-513).
+
+- `is_available() -> bool` — Return True if the client is configured and ready to use.
+- `get_error_status() -> dict` — Return the current API error status dict.
+- `search_stock_deep(symbol: str, company_name: str='', timeout: int=30, context: str='') -> dict` — Run deep research for a single stock.
+- `search_x_sentiment(symbol: str, company_name: str='', timeout: int=30, context: str='') -> dict` — Fetch X (Twitter) sentiment for *symbol*.
+- `search_industry(industry_or_theme: str, timeout: int=30, context: str='') -> dict` — Run industry/theme research.
+- `search_market(market_or_index: str, timeout: int=30, context: str='') -> dict` — Run market overview research.
+- `search_business(symbol: str, company_name: str='', timeout: int=60, context: str='') -> dict` — Run business model research for *symbol*.
+
+### src.core.ports.storage
+
+Storage port interfaces for history_store and note_manager abstraction (KIK-513).
+
+
+#### class HistoryStore
+Persistent storage for screening/report/trade/health/research history.
+
+- `save_screening(preset: str, region: str, results: list[dict], sector: str | None=None, theme: str | None=None, base_dir: str='data/history') -> str` — Save screening results. Returns absolute path of saved file.
+- `save_report(symbol: str, data: dict, score: float, verdict: str, base_dir: str='data/history') -> str` — Save a stock report. Returns absolute path of saved file.
+- `save_research(research_type: str, target: str, result: dict, base_dir: str='data/history') -> str` — Save research results. Returns absolute path of saved file.
+- `load_history(category: str, days_back: int | None=None, base_dir: str='data/history') -> list[dict]` — Load history files for *category*, sorted newest-first.
+
+#### class NoteStore
+Storage for investment notes (thesis, concern, lesson, etc.).
+
+- `save_note(symbol: str, note_type: str, content: str, *, category: str='stock', base_dir: str='data/notes') -> str` — Save an investment note. Returns absolute path of saved file.
+- `list_notes(symbol: str | None=None, note_type: str | None=None, category: str | None=None, base_dir: str='data/notes') -> list[dict]` — Return notes matching the given filters.
+
 ### src.core.proactive_engine (KIK-435)
 
 Proactive action suggestions based on accumulated knowledge graph (KIK-435).
 
-- `get_suggestions(context: str='', symbol: str='', sector: str='') -> list[dict]` — Return proactive suggestions from the knowledge graph (KIK-435).
+- `get_suggestions(context: str='', symbol: str='', sector: str='', *, graph_reader: GraphReader | None=None) -> list[dict]` — Return proactive suggestions from the knowledge graph (KIK-435).
 - `format_suggestions(suggestions: list[dict]) -> str` — Format suggestion list as markdown for display after skill output.
 
 #### class ProactiveEngine
@@ -348,10 +401,10 @@ Generate proactive next-action suggestions from the knowledge graph.
 
 Deep research orchestration for stocks, industries, and markets (KIK-367).
 
-- `research_stock(symbol: str, yahoo_client_module: StockInfoProvider) -> dict` — Run comprehensive stock research combining yfinance and Grok API.
-- `research_industry(theme: str) -> dict` — Run industry/theme research via Grok API.
-- `research_market(market: str, yahoo_client_module=None) -> dict` — Run market overview research via yfinance + Grok.
-- `research_business(symbol: str, yahoo_client_module: StockInfoProvider) -> dict` — Run business model research combining yfinance and Grok.
+- `research_stock(symbol: str, yahoo_client_module: StockInfoProvider, *, research_client: ResearchClient | None=None) -> dict` — Run comprehensive stock research combining yfinance and Grok API.
+- `research_industry(theme: str, *, research_client: ResearchClient | None=None) -> dict` — Run industry/theme research via Grok API.
+- `research_market(market: str, yahoo_client_module=None, *, research_client: ResearchClient | None=None) -> dict` — Run market overview research via yfinance + Grok.
+- `research_business(symbol: str, yahoo_client_module: StockInfoProvider, *, research_client: ResearchClient | None=None) -> dict` — Run business model research combining yfinance and Grok.
 
 ### src.core.return_estimate (KIK-469 P2: volatility+is_etf)
 
