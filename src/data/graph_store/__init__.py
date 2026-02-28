@@ -81,6 +81,14 @@ from src.data.graph_store.note import (  # noqa: F401
     update_action_item_linear,
 )
 
+# --- linker.py: AI-driven knowledge graph linking (KIK-434, KIK-517) ---
+from src.data.graph_store.linker import (  # noqa: F401
+    AIGraphLinker,
+    link_research,
+    link_note,
+    link_report,
+)
+
 # Re-export schema/vector constants for tests that reference them
 from src.data.graph_store._common import (  # noqa: F401
     _AI_REL_CYPHERS,

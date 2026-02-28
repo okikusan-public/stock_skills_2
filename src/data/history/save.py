@@ -9,7 +9,7 @@ import re as _re
 from datetime import date, datetime
 from typing import Optional
 
-from src.data.history_helpers import (
+from src.data.history._helpers import (
     _safe_filename,
     _history_dir,
     _sanitize,

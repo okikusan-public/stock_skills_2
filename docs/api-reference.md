@@ -683,13 +683,56 @@ Value trap detection (extracted from health_check.py, KIK-392).
 
 ## Data Layer
 
-### src.data.auto_context (KIK-411/420: ハイブリッド検索)
+### src.data.auto_context
+
+Backward-compatible shim (KIK-517). Real module: src.data.context.auto_context
+
+
+### src.data.context.auto_context (KIK-411/420: ハイブリッド検索)
 
 Auto graph context injection for user prompts (KIK-411/420/427).
 
 - `freshness_label(date_str: str) -> str` — Return freshness label for a date string.
 - `freshness_action(label: str) -> str` — Return recommended action for a freshness label.
 - `get_context(user_input: str) -> Optional[dict]` — Auto-detect symbol in user input and retrieve graph context.
+
+### src.data.context.grok_context (KIK-488: Neo4j知識→Grokプロンプト注入)
+
+Compact knowledge context extraction for Grok API prompt injection (KIK-488).
+
+- `get_stock_context(symbol: str) -> str` — Extract compact context for a specific stock symbol.
+- `get_industry_context(industry_or_theme: str) -> str` — Extract compact context for industry/theme research.
+- `get_market_context() -> str` — Extract compact context for market research.
+- `get_business_context(symbol: str) -> str` — Extract compact context for business model analysis.
+
+### src.data.context.screen_annotator (KIK-452: スクリーニング結果エンリッチ)
+
+Screen result annotator -- enrich screening results with sell/note context (KIK-418/419).
+
+- `get_recent_sells(days: int=90) -> dict[str, str]` — Get symbols sold within the last *days*.
+- `get_notes_for_symbols(symbols: list[str], note_types: Optional[list[str]]=None) -> dict[str, list[dict]]` — Get notes for symbols. Returns {symbol: [{type, content, date}]}.
+- `annotate_results(results: list[dict], sell_lookback_days: int=90) -> tuple[list[dict], int]` — Annotate screening results with sell history and note markers.
+
+### src.data.context.screening_context (KIK-452: GraphRAGコンテキスト)
+
+GraphRAG context aggregator for screening output (KIK-452).
+
+- `get_screening_graph_context(symbols: list[str], sectors: list[str], days: int=7) -> dict` — Aggregate knowledge graph context for a set of screened symbols.
+
+### src.data.context.summary_builder (KIK-420: セマンティックサマリー生成)
+
+Semantic summary template builders for Neo4j vector search (KIK-420).
+
+- `build_screen_summary(screen_date: str, preset: str, region: str, top_symbols: list[str] | None=None) -> str` — Build summary for a Screen node.
+- `build_report_summary(symbol: str, name: str='', score: float=0, verdict: str='', sector: str='') -> str` — Build summary for a Report node.
+- `build_trade_summary(trade_date: str, trade_type: str, symbol: str, shares: int=0, memo: str='') -> str` — Build summary for a Trade node.
+- `build_health_summary(health_date: str, summary: dict | None=None) -> str` — Build summary for a HealthCheck node.
+- `build_research_summary(research_type: str, target: str, result: dict) -> str` — Build summary for a Research node.
+- `build_market_context_summary(context_date: str, indices: list[dict] | None=None, grok_research: dict | None=None) -> str` — Build summary for a MarketContext node.
+- `build_note_summary(symbol: str='', note_type: str='', content: str='', category: str='') -> str` — Build summary for a Note node.
+- `build_watchlist_summary(name: str='', symbols: list[str] | None=None) -> str` — Build summary for a Watchlist node.
+- `build_stress_test_summary(test_date: str, scenario: str='', portfolio_impact: float=0, symbol_count: int=0) -> str` — Build summary for a StressTest node (KIK-428).
+- `build_forecast_summary(forecast_date: str, optimistic: float | None=None, base: float | None=None, pessimistic: float | None=None, symbol_count: int=0) -> str` — Build summary for a Forecast node (KIK-428).
 
 ### src.data.embedding_client (KIK-420: TEIベクトル検索)
 
@@ -699,26 +742,15 @@ TEI (Text Embeddings Inference) REST API client (KIK-420).
 - `get_embedding(text: str) -> list[float] | None` — Get embedding vector from TEI. Returns None on failure.
 - `reset_cache()` — Reset availability cache (for testing).
 
-### src.data.graph_linker (KIK-434)
+### src.data.graph_linker
 
-AI-driven knowledge graph linking (KIK-434).
+Backward-compatible shim (KIK-517). Real module: src.data.graph_store.linker
 
-- `link_research(research_id: str, research_type: str, target: str, summary: str) -> int` — Link a newly saved Research node to portfolio holdings via LLM (KIK-434).
-- `link_note(note_id: str, symbol: Optional[str], note_type: str, content: str) -> int` — Link a newly saved Note node to related nodes for the same symbol (KIK-434).
-- `link_report(report_id: str, symbol: str, sector: str, score: float, verdict: str) -> int` — Link a newly saved Report node to Notes and same-sector Research (KIK-434).
 
-#### class AIGraphLinker
-LLM-driven semantic relationship engine (KIK-434).
+### src.data.graph_nl_query
 
-- `is_available() -> bool` — Return True if ANTHROPIC_API_KEY is set.
-- `link_on_save(new_node: dict, candidates: list[dict]) -> list[dict]` — Determine semantic relationships via LLM.
+Backward-compatible shim (KIK-517). Real module: src.data.graph_query.nl_query
 
-### src.data.graph_nl_query (KIK-411)
-
-Natural language → graph query dispatcher (KIK-409 Phase 1).
-
-- `query(user_input: str) -> Optional[dict]` — Match user input to a template and execute the corresponding graph query.
-- `format_result(query_type: str, result, params: dict) -> str` — Format query result as markdown.
 
 ### src.data.graph_query._common
 
@@ -737,6 +769,13 @@ MarketContext/Indicator/UpcomingEvent graph queries.
 
 - `get_recent_market_context() -> Optional[dict]` — Get the most recent MarketContext node.
 - `get_upcoming_events(limit: int=10, within_days: int=None) -> list[dict]` — Get UpcomingEvent nodes from the most recent MarketContext.
+
+### src.data.graph_query.nl_query (KIK-411: 自然言語グラフクエリ)
+
+Natural language → graph query dispatcher (KIK-409 Phase 1).
+
+- `query(user_input: str) -> Optional[dict]` — Match user input to a template and execute the corresponding graph query.
+- `format_result(query_type: str, result, params: dict) -> str` — Format query result as markdown.
 
 ### src.data.graph_query.portfolio
 
@@ -792,6 +831,20 @@ Shared utilities for graph_store submodules (KIK-507).
 - `init_schema() -> bool` — Create constraints and indexes. Returns True on success.
 - `create_ai_relationship(from_id: str, to_id: str, rel_type: str, confidence: float, reason: str) -> bool` — MERGE an AI-determined semantic relationship between two nodes (KIK-434).
 - `clear_all() -> bool` — Delete all nodes and relationships. Used for --rebuild.
+
+### src.data.graph_store.linker (KIK-434: AI知識グラフリンク)
+
+AI-driven knowledge graph linking (KIK-434).
+
+- `link_research(research_id: str, research_type: str, target: str, summary: str) -> int` — Link a newly saved Research node to portfolio holdings via LLM (KIK-434).
+- `link_note(note_id: str, symbol: Optional[str], note_type: str, content: str) -> int` — Link a newly saved Note node to related nodes for the same symbol (KIK-434).
+- `link_report(report_id: str, symbol: str, sector: str, score: float, verdict: str) -> int` — Link a newly saved Report node to Notes and same-sector Research (KIK-434).
+
+#### class AIGraphLinker
+LLM-driven semantic relationship engine (KIK-434).
+
+- `is_available() -> bool` — Return True if ANTHROPIC_API_KEY is set.
+- `link_on_save(new_node: dict, candidates: list[dict]) -> list[dict]` — Determine semantic relationships via LLM.
 
 ### src.data.graph_store.market
 
@@ -877,28 +930,24 @@ Stock-related Grok API functions: search_stock_deep, search_x_sentiment.
 - `search_x_sentiment(symbol: str, company_name: str='', timeout: int=30, context: str='') -> dict` — Search X for stock sentiment using Grok API.
 - `search_stock_deep(symbol: str, company_name: str='', timeout: int=30, context: str='') -> dict` — Deep research on a stock via X and web search.
 
-### src.data.grok_context (KIK-488: Neo4j知識→Grokプロンプト注入)
+### src.data.grok_context
 
-Compact knowledge context extraction for Grok API prompt injection (KIK-488).
+Backward-compatible shim (KIK-517). Real module: src.data.context.grok_context
 
-- `get_stock_context(symbol: str) -> str` — Extract compact context for a specific stock symbol.
-- `get_industry_context(industry_or_theme: str) -> str` — Extract compact context for industry/theme research.
-- `get_market_context() -> str` — Extract compact context for market research.
-- `get_business_context(symbol: str) -> str` — Extract compact context for business model analysis.
 
-### src.data.history_helpers (KIK-512: シリアライズ・埋め込みヘルパー)
+### src.data.history._helpers
 
 Internal helpers for history store (KIK-512 split).
 
 
-### src.data.history_load (KIK-512: load/query関数群)
+### src.data.history.load
 
 History store load/query functions (KIK-512 split).
 
 - `load_history(category: str, days_back: int | None=None, base_dir: str='data/history') -> list[dict]` — Load history files for a category, sorted newest-first.
 - `list_history_files(category: str, base_dir: str='data/history') -> list[str]` — List history file paths for a category, sorted newest-first.
 
-### src.data.history_save (KIK-512: save_*関数群)
+### src.data.history.save
 
 History store save functions (KIK-512 split).
 
@@ -911,9 +960,9 @@ History store save functions (KIK-512 split).
 - `save_stress_test(scenario: str, symbols: list[str], portfolio_impact: float, per_stock_impacts: list[dict] | None=None, var_result: dict | None=None, high_correlation_pairs: list | None=None, concentration: dict | None=None, recommendations: list | None=None, base_dir: str='data/history') -> str` — Save stress test results to JSON (KIK-428).
 - `save_forecast(positions: list[dict], total_value_jpy: float=0, base_dir: str='data/history') -> str` — Save forecast results to JSON (KIK-428).
 
-### src.data.history_store (KIK-428)
+### src.data.history_store
 
-History store -- save and load screening/report/trade/health/research JSON files.
+Backward-compatible shim (KIK-517). Real module: src.data.history
 
 
 ### src.data.linear_client (KIK-472)
@@ -933,34 +982,20 @@ Note manager -- dual-write to JSON files and Neo4j (KIK-397, KIK-429).
 - `load_notes(symbol: Optional[str]=None, note_type: Optional[str]=None, category: Optional[str]=None, base_dir: str=_NOTES_DIR) -> list[dict]` — Load notes from JSON files.
 - `delete_note(note_id: str, base_dir: str=_NOTES_DIR) -> bool` — Delete a note by ID from JSON files.
 
-### src.data.screen_annotator (KIK-452: GraphRAGコンテキスト)
+### src.data.screen_annotator
 
-Screen result annotator -- enrich screening results with sell/note context (KIK-418/419).
+Backward-compatible shim (KIK-517). Real module: src.data.context.screen_annotator
 
-- `get_recent_sells(days: int=90) -> dict[str, str]` — Get symbols sold within the last *days*.
-- `get_notes_for_symbols(symbols: list[str], note_types: Optional[list[str]]=None) -> dict[str, list[dict]]` — Get notes for symbols. Returns {symbol: [{type, content, date}]}.
-- `annotate_results(results: list[dict], sell_lookback_days: int=90) -> tuple[list[dict], int]` — Annotate screening results with sell history and note markers.
 
-### src.data.screening_context (KIK-452)
+### src.data.screening_context
 
-GraphRAG context aggregator for screening output (KIK-452).
+Backward-compatible shim (KIK-517). Real module: src.data.context.screening_context
 
-- `get_screening_graph_context(symbols: list[str], sectors: list[str], days: int=7) -> dict` — Aggregate knowledge graph context for a set of screened symbols.
 
 ### src.data.summary_builder
 
-Semantic summary template builders for Neo4j vector search (KIK-420).
+Backward-compatible shim (KIK-517). Real module: src.data.context.summary_builder
 
-- `build_screen_summary(screen_date: str, preset: str, region: str, top_symbols: list[str] | None=None) -> str` — Build summary for a Screen node.
-- `build_report_summary(symbol: str, name: str='', score: float=0, verdict: str='', sector: str='') -> str` — Build summary for a Report node.
-- `build_trade_summary(trade_date: str, trade_type: str, symbol: str, shares: int=0, memo: str='') -> str` — Build summary for a Trade node.
-- `build_health_summary(health_date: str, summary: dict | None=None) -> str` — Build summary for a HealthCheck node.
-- `build_research_summary(research_type: str, target: str, result: dict) -> str` — Build summary for a Research node.
-- `build_market_context_summary(context_date: str, indices: list[dict] | None=None, grok_research: dict | None=None) -> str` — Build summary for a MarketContext node.
-- `build_note_summary(symbol: str='', note_type: str='', content: str='', category: str='') -> str` — Build summary for a Note node.
-- `build_watchlist_summary(name: str='', symbols: list[str] | None=None) -> str` — Build summary for a Watchlist node.
-- `build_stress_test_summary(test_date: str, scenario: str='', portfolio_impact: float=0, symbol_count: int=0) -> str` — Build summary for a StressTest node (KIK-428).
-- `build_forecast_summary(forecast_date: str, optimistic: float | None=None, base: float | None=None, pessimistic: float | None=None, symbol_count: int=0) -> str` — Build summary for a Forecast node (KIK-428).
 
 ### src.data.yahoo_client._cache
 

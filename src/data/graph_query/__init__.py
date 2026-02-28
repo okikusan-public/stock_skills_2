@@ -60,3 +60,9 @@ from src.data.graph_query.proactive import (  # noqa: F401
     get_old_thesis_notes,
     get_concern_notes,
 )
+
+# --- nl_query.py: Natural language → graph query dispatcher (KIK-409, KIK-517) ---
+from src.data.graph_query.nl_query import (  # noqa: F401
+    query,
+    format_result,
+)
