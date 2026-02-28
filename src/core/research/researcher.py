@@ -6,6 +6,7 @@ Integrates yfinance quantitative data with Grok API qualitative data
 
 import sys
 
+from src.core.ports.market_data import StockInfoProvider
 from src.core.screening.indicators import calculate_value_score
 
 # Grok API: graceful degradation when module is unavailable
@@ -136,15 +137,16 @@ def _empty_business() -> dict:
     }
 
 
-def research_stock(symbol: str, yahoo_client_module) -> dict:
+def research_stock(symbol: str, yahoo_client_module: StockInfoProvider) -> dict:
     """Run comprehensive stock research combining yfinance and Grok API.
 
     Parameters
     ----------
     symbol : str
         Ticker symbol (e.g. "7203.T", "AAPL").
-    yahoo_client_module
+    yahoo_client_module : StockInfoProvider
         The yahoo_client module (enables mock injection in tests).
+        Any object satisfying ``StockInfoProvider`` (KIK-516).
 
     Returns
     -------
@@ -304,15 +306,16 @@ def research_market(market: str, yahoo_client_module=None) -> dict:
     }
 
 
-def research_business(symbol: str, yahoo_client_module) -> dict:
+def research_business(symbol: str, yahoo_client_module: StockInfoProvider) -> dict:
     """Run business model research combining yfinance and Grok.
 
     Parameters
     ----------
     symbol : str
         Ticker symbol (e.g. "7751.T", "AAPL").
-    yahoo_client_module
+    yahoo_client_module : StockInfoProvider
         The yahoo_client module (enables mock injection in tests).
+        Any object satisfying ``StockInfoProvider`` (KIK-516).
 
     Returns
     -------

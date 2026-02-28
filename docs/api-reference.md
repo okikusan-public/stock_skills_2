@@ -273,6 +273,65 @@ Small-cap classification and allocation rules (KIK-438).
 - `classify_market_cap(market_cap: float | None, region_code: str) -> str` — Classify stock size from market cap and region code.
 - `check_small_cap_allocation(small_cap_weight: float) -> dict` — Check portfolio-level small-cap allocation.
 
+### src.core.ports.market_data
+
+ISP-compliant Protocol interfaces for yahoo_client roles (KIK-516).
+
+
+#### class StockInfoProvider
+Provides per-symbol fundamental data and batch fetching.
+
+- `get_stock_info(symbol: str) -> Optional[dict]` — Return fundamental data for a single symbol.
+- `get_stock_detail(symbol: str) -> Optional[dict]` — Return extended detail for a single symbol.
+- `get_multiple_stocks(symbols: list[str]) -> dict[str, Optional[dict]]` — Return fundamental data for a batch of symbols.
+
+#### class ScreeningProvider
+Executes EquityQuery-based bulk screening via Yahoo Finance.
+
+- `screen_stocks(query: EquityQuery, size: int=250, sort_field: str='intradaymarketcap', sort_asc: bool=False, max_results: int=0) -> list[dict]` — Screen stocks matching *query* using yf.screen().
+
+#### class PriceHistoryProvider
+Provides OHLCV price history and recent news for a symbol.
+
+- `get_price_history(symbol: str, period: str='1y') -> Optional[pd.DataFrame]` — Return OHLCV price history as a DataFrame.
+- `get_stock_news(symbol: str, count: int=10) -> list[dict]` — Return recent news articles for a symbol.
+
+#### class MacroDataProvider
+Provides macro-economic indicator data.
+
+- `get_macro_indicators() -> list[dict]` — Return current values for macro indicators (S&P500, VIX, etc.).
+
+### src.core.ports.research
+
+ISP-compliant Protocol interfaces for grok_client roles (KIK-516).
+
+
+#### class ResearchSearcher
+Searches X/web for stock, market, industry, and business research.
+
+- `search_stock_deep(symbol: str, company_name: str='', timeout: int=30, context: str='') -> dict` — Deep research on a stock via X and web search.
+- `search_x_sentiment(symbol: str, company_name: str='', timeout: int=30, context: str='') -> dict` — Search X for market sentiment on a stock.
+- `search_industry(industry_or_theme: str, timeout: int=30, context: str='') -> dict` — Research an industry or investment theme via X and web.
+- `search_market(market_or_index: str, timeout: int=30, context: str='') -> dict` — Research a market or index via X and web search.
+- `search_business(symbol: str, company_name: str='', timeout: int=60, context: str='') -> dict` — Research a company's business model via X and web search.
+
+#### class TrendingSearcher
+Discovers trending stocks and themes from X/web (KIK-440).
+
+- `search_trending_stocks(region: str='japan', theme: Optional[str]=None, timeout: int=60) -> dict` — Search X for currently trending stocks in a market region.
+- `get_trending_themes(region: str='global', timeout: int=30) -> dict` — Discover trending investment themes via Grok X/Web search.
+
+#### class TextSynthesizer
+Synthesises free-form text using the Grok API (KIK-452).
+
+- `synthesize_text(prompt: str, timeout: int=20) -> str` — Run a pure text-synthesis call (no search tools).
+
+#### class GrokAvailability
+Reports API availability and error state (KIK-431).
+
+- `is_available() -> bool` — Return True when the API key is configured and no fatal error.
+- `get_error_status() -> dict` — Return the current error state dict.
+
 ### src.core.proactive_engine (KIK-435)
 
 Proactive action suggestions based on accumulated knowledge graph (KIK-435).
@@ -289,10 +348,10 @@ Generate proactive next-action suggestions from the knowledge graph.
 
 Deep research orchestration for stocks, industries, and markets (KIK-367).
 
-- `research_stock(symbol: str, yahoo_client_module) -> dict` — Run comprehensive stock research combining yfinance and Grok API.
+- `research_stock(symbol: str, yahoo_client_module: StockInfoProvider) -> dict` — Run comprehensive stock research combining yfinance and Grok API.
 - `research_industry(theme: str) -> dict` — Run industry/theme research via Grok API.
 - `research_market(market: str, yahoo_client_module=None) -> dict` — Run market overview research via yfinance + Grok.
-- `research_business(symbol: str, yahoo_client_module) -> dict` — Run business model research combining yfinance and Grok.
+- `research_business(symbol: str, yahoo_client_module: StockInfoProvider) -> dict` — Run business model research combining yfinance and Grok.
 
 ### src.core.return_estimate (KIK-469 P2: volatility+is_etf)
 

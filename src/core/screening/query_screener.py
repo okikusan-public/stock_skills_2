@@ -2,6 +2,7 @@
 
 from typing import Optional
 
+from src.core.ports.market_data import ScreeningProvider
 from src.core.screening.filters import apply_filters
 from src.core.screening.indicators import (
     calculate_value_score,
@@ -23,13 +24,14 @@ class QueryScreener:
     This class does NOT require a Market object or a pre-built symbol list.
     """
 
-    def __init__(self, yahoo_client):
+    def __init__(self, yahoo_client: ScreeningProvider):
         """Initialise the screener.
 
         Parameters
         ----------
-        yahoo_client : module or object
+        yahoo_client : ScreeningProvider
             Must expose ``screen_stocks(query, size, sort_field, sort_asc) -> list[dict]``.
+            Typically ``src.data.yahoo_client`` but accepts any ``ScreeningProvider``.
         """
         self.yahoo_client = yahoo_client
 
