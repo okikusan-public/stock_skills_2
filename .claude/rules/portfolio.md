@@ -43,6 +43,17 @@ paths:
 - ヘルスチェック出力: `[小型]` バッジ付きシンボル + PF全体の小型株比率サマリー
 - 構造分析（analyze）: 規模別構成テーブル（大型/中型/小型/不明）+ size_hhi を追加（4軸化）
 
+## コミュニティ集中監視 (KIK-549)
+
+- `src/core/health_check.py`: `_compute_community_concentration()` でコミュニティ別の集中度を計測
+- Community HHI = Σ(コミュニティ別時価総額比率)²
+- 警告閾値（同一コミュニティにcount>=2銘柄が該当する場合のみ）:
+  - weight `>30%` → warning「コミュニティ集中やや高め」
+  - weight `>50%` → critical「実質的に分散できていない可能性」
+- ヘルスチェック出力: `⚠️ コミュニティ集中: 〇〇に △銘柄（%%）`
+- コミュニティ = 共起シグナル（Screen/Theme/Sector/News）に基づく銘柄クラスタ（KIK-547）
+- Neo4j未接続時: `community_concentration = None`（警告なし、graceful degradation）
+
 ## 株主還元率 (KIK-375)
 
 - `calculate_shareholder_return()`: 配当 + 自社株買い の総還元率を算出
