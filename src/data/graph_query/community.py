@@ -413,9 +413,38 @@ def _auto_name_community(
     """Generate a human-readable name for a community.
 
     Picks the most common Sector and Theme among members.
+    Falls back to News/Catalyst keyword extraction (KIK-550).
     """
+    result = label_community(members, session, fallback_id)
+    return result["name"]
+
+
+def label_community(
+    members: list[str],
+    session,
+    fallback_id: int = 0,
+) -> dict:
+    """Generate a label for a community with confidence score (KIK-550).
+
+    Naming priority:
+    1. Common Sector + Theme → high confidence
+    2. Common Sector only → medium confidence
+    3. Common Theme only → medium confidence
+    4. News/Catalyst keyword extraction → low confidence
+    5. Fallback "Community_{id}" → zero confidence
+
+    Returns {name, confidence, source, details}.
+    """
+    fallback = {
+        "name": f"Community_{fallback_id}",
+        "confidence": 0.0,
+        "source": "fallback",
+        "details": {},
+    }
     if not members:
-        return f"Community_{fallback_id}"
+        return fallback
+
+    n = len(members)
 
     # Most common sector
     sector_result = session.run(
@@ -427,6 +456,7 @@ def _auto_name_community(
     )
     sector_record = sector_result.single()
     sector_name = sector_record["name"] if sector_record else None
+    sector_cnt = sector_record["cnt"] if sector_record else 0
 
     # Most common theme
     theme_result = session.run(
@@ -438,14 +468,132 @@ def _auto_name_community(
     )
     theme_record = theme_result.single()
     theme_name = theme_record["name"] if theme_record else None
+    theme_cnt = theme_record["cnt"] if theme_record else 0
 
     if sector_name and theme_name:
-        return f"{sector_name} x {theme_name}"
+        confidence = min(1.0, (sector_cnt + theme_cnt) / (2 * n))
+        return {
+            "name": f"{sector_name} x {theme_name}",
+            "confidence": round(confidence, 2),
+            "source": "sector+theme",
+            "details": {"sector": sector_name, "theme": theme_name},
+        }
     if sector_name:
-        return sector_name
+        confidence = min(1.0, sector_cnt / n)
+        return {
+            "name": sector_name,
+            "confidence": round(confidence * 0.8, 2),
+            "source": "sector",
+            "details": {"sector": sector_name},
+        }
     if theme_name:
-        return theme_name
-    return f"Community_{fallback_id}"
+        confidence = min(1.0, theme_cnt / n)
+        return {
+            "name": theme_name,
+            "confidence": round(confidence * 0.8, 2),
+            "source": "theme",
+            "details": {"theme": theme_name},
+        }
+
+    # KIK-550: Fallback to News/Catalyst keyword extraction
+    keyword = _extract_news_keyword(members, session)
+    if keyword:
+        return {
+            "name": keyword,
+            "confidence": 0.3,
+            "source": "news_keyword",
+            "details": {"keyword": keyword},
+        }
+
+    return fallback
+
+
+def _extract_news_keyword(members: list[str], session) -> Optional[str]:
+    """Extract a common keyword from shared News titles (KIK-550).
+
+    Finds News nodes that mention multiple community members
+    and extracts the most frequent non-trivial word from their titles.
+    """
+    result = session.run(
+        "MATCH (n:News)-[:MENTIONS]->(s:Stock) "
+        "WHERE s.symbol IN $symbols "
+        "WITH n, count(DISTINCT s) AS mention_cnt "
+        "WHERE mention_cnt >= 2 "
+        "RETURN n.title AS title "
+        "ORDER BY mention_cnt DESC LIMIT 10",
+        symbols=members,
+    )
+    titles = [r["title"] for r in result if r["title"]]
+    if not titles:
+        return None
+
+    # Simple keyword frequency counting
+    from collections import Counter
+
+    stop_words = {
+        "the", "a", "an", "is", "are", "was", "were", "be", "been",
+        "in", "on", "at", "to", "for", "of", "with", "by", "from",
+        "and", "or", "but", "not", "no", "as", "it", "its", "this",
+        "that", "up", "out", "if", "about", "into", "has", "have",
+        "will", "would", "could", "should", "may", "might",
+        "の", "は", "が", "を", "に", "で", "と", "も", "や", "か",
+        "する", "した", "して", "れる", "られる", "こと", "もの",
+        "ある", "いる", "なる", "から", "まで", "より", "など",
+    }
+
+    word_counts: Counter = Counter()
+    for title in titles:
+        words = title.split()
+        for word in words:
+            w = word.strip(".,;:!?()[]{}\"'").lower()
+            if len(w) >= 2 and w not in stop_words:
+                word_counts[w] += 1
+
+    if not word_counts:
+        return None
+
+    top_word, count = word_counts.most_common(1)[0]
+    if count >= 2:
+        return top_word
+    return None
+
+
+def discover_hidden_themes() -> list[dict]:
+    """Discover hidden themes from community patterns (KIK-550).
+
+    Analyzes all communities and returns those with non-obvious themes
+    (i.e., themes discovered from News/Catalyst keywords rather than
+    explicit Sector/Theme tags).
+
+    Returns list of {community_id, name, confidence, source, members, size}.
+    """
+    driver = _common._get_driver()
+    if driver is None:
+        return []
+    try:
+        communities = get_communities(level=0)
+        if not communities:
+            return []
+
+        discoveries = []
+        with driver.session() as session:
+            for comm in communities:
+                members = comm.get("members", [])
+                if len(members) < 2:
+                    continue
+                label = label_community(members, session, fallback_id=0)
+                if label["source"] == "news_keyword":
+                    discoveries.append({
+                        "community_id": comm["id"],
+                        "name": label["name"],
+                        "confidence": label["confidence"],
+                        "source": label["source"],
+                        "members": members,
+                        "size": len(members),
+                    })
+        return discoveries
+    except Exception:
+        return []
 
 
 def _save_communities(communities: list[dict]) -> bool:

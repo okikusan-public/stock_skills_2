@@ -772,6 +772,8 @@ Community detection via co-occurrence analysis (KIK-547).
 - `get_stock_community(symbol: str) -> Optional[dict]` — Get the community a stock belongs to.
 - `get_similar_stocks(symbol: str, top_k: int=5, similarity_cutoff: float=0.3) -> list[dict]` — Get stocks most similar to the given symbol.
 - `update_stock_community(symbol: str, similarity_cutoff: float=0.3) -> Optional[dict]` — Assign a stock to the best-matching existing community.
+- `label_community(members: list[str], session, fallback_id: int=0) -> dict` — Generate a label for a community with confidence score (KIK-550).
+- `discover_hidden_themes() -> list[dict]` — Discover hidden themes from community patterns (KIK-550).
 
 ### src.data.graph_query.market
 

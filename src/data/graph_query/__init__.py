@@ -61,12 +61,14 @@ from src.data.graph_query.proactive import (  # noqa: F401
     get_concern_notes,
 )
 
-# --- Community detection (KIK-547/549) ---
+# --- Community detection (KIK-547/549/550) ---
 from src.data.graph_query.community import (  # noqa: F401
     detect_communities,
+    discover_hidden_themes,
     get_communities,
     get_stock_community,
     get_similar_stocks,
+    label_community,
     update_stock_community,
 )
 
