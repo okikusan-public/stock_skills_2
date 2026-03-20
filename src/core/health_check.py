@@ -481,6 +481,14 @@ def run_health_check(csv_path: str, client) -> dict:
             from src.core.screening.contrarian import compute_contrarian_score as _ct_score
             contrarian_data = _ct_score(hist, stock_detail)
 
+        # 8. Exit-rule check (KIK-566)
+        exit_rule_hit = None
+        try:
+            from src.data.note_manager import check_exit_rule
+            exit_rule_hit = check_exit_rule(symbol, pos.get("pnl_pct", 0))
+        except Exception:
+            pass
+
         result = {
             "symbol": symbol,
             "name": pos.get("name") or pos.get("memo", ""),
@@ -495,6 +503,7 @@ def run_health_check(csv_path: str, client) -> dict:
             "shareholder_return": sh_return,
             "return_stability": sh_stability,
             "contrarian": contrarian_data,
+            "exit_rule_hit": exit_rule_hit,
         }
         results.append(result)
 

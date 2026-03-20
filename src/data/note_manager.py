@@ -13,7 +13,7 @@ from typing import Optional
 
 
 _NOTES_DIR = "data/notes"
-_VALID_TYPES = {"thesis", "observation", "concern", "review", "target", "lesson", "journal"}
+_VALID_TYPES = {"thesis", "observation", "concern", "review", "target", "lesson", "journal", "exit-rule"}
 _VALID_CATEGORIES = {"stock", "portfolio", "market", "general"}
 
 
@@ -32,6 +32,8 @@ def save_note(
     base_dir: str = _NOTES_DIR,
     trigger: Optional[str] = None,
     expected_action: Optional[str] = None,
+    stop_loss: Optional[str] = None,
+    take_profit: Optional[str] = None,
 ) -> dict:
     """Save a note to JSON file and Neo4j.
 
@@ -106,6 +108,13 @@ def save_note(
             note["trigger"] = trigger
         if expected_action:
             note["expected_action"] = expected_action
+
+    # KIK-566: exit-rule specific fields
+    if note_type == "exit-rule":
+        if stop_loss:
+            note["stop_loss"] = stop_loss
+        if take_profit:
+            note["take_profit"] = take_profit
 
     # KIK-564: Lesson conflict detection (before save)
     lesson_conflicts: list[dict] = []
@@ -365,6 +374,74 @@ def _embedding_similarity(text_a: str, text_b: str) -> Optional[float]:
             return 0.0
         return dot / (norm_a * norm_b)
     except Exception:
+        return None
+
+
+def get_exit_rules(
+    symbol: Optional[str] = None,
+    base_dir: str = _NOTES_DIR,
+) -> list[dict]:
+    """Load exit-rule notes, optionally filtered by symbol (KIK-566).
+
+    Returns list of exit-rule notes sorted by date descending.
+    Each note has stop_loss and/or take_profit fields.
+    """
+    return load_notes(note_type="exit-rule", symbol=symbol, base_dir=base_dir)
+
+
+def check_exit_rule(
+    symbol: str,
+    pnl_pct: float,
+    base_dir: str = _NOTES_DIR,
+) -> Optional[dict]:
+    """Check if a position has hit any exit-rule threshold (KIK-566).
+
+    Parameters
+    ----------
+    symbol : str
+        Ticker symbol.
+    pnl_pct : float
+        Current P&L percentage (e.g., -15.0 means -15%).
+
+    Returns
+    -------
+    Optional[dict]
+        {type: "stop_loss"|"take_profit", threshold: str, reason: str}
+        or None if no threshold hit.
+    """
+    rules = get_exit_rules(symbol=symbol, base_dir=base_dir)
+    if not rules:
+        return None
+
+    # Use the most recent rule
+    rule = rules[0]
+    reason = (rule.get("content") or "")[:100]
+
+    # Check stop_loss
+    sl = rule.get("stop_loss", "")
+    if sl:
+        sl_val = _parse_threshold(sl)
+        if sl_val is not None and pnl_pct <= sl_val:
+            return {"type": "stop_loss", "threshold": sl, "reason": reason}
+
+    # Check take_profit
+    tp = rule.get("take_profit", "")
+    if tp:
+        tp_val = _parse_threshold(tp)
+        if tp_val is not None and pnl_pct >= tp_val:
+            return {"type": "take_profit", "threshold": tp, "reason": reason}
+
+    return None
+
+
+def _parse_threshold(value: str) -> Optional[float]:
+    """Parse a threshold string like '-15%' or '+20%' into a float."""
+    if not value:
+        return None
+    s = value.strip().replace("%", "").replace("％", "")
+    try:
+        return float(s)
+    except ValueError:
         return None
 
 
