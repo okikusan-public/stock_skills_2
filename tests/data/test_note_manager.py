@@ -65,7 +65,7 @@ class TestSaveNote:
             save_note("7203.T", "invalid_type", "content", base_dir=str(tmp_path))
 
     def test_save_note_valid_types(self):
-        assert _VALID_TYPES == {"thesis", "observation", "concern", "review", "target", "lesson", "journal"}
+        assert _VALID_TYPES == {"thesis", "observation", "concern", "review", "target", "lesson", "journal", "exit-rule"}
 
     def test_save_note_lesson_type(self, tmp_path):
         """lesson タイプのノートが保存できること (KIK-408)."""

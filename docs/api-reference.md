@@ -992,9 +992,11 @@ Linear API client for action item management (KIK-472).
 
 Note manager -- dual-write to JSON files and Neo4j (KIK-397, KIK-429).
 
-- `save_note(symbol: Optional[str]=None, note_type: str='observation', content: str='', source: str='', category: Optional[str]=None, base_dir: str=_NOTES_DIR, trigger: Optional[str]=None, expected_action: Optional[str]=None) -> dict` — Save a note to JSON file and Neo4j.
+- `save_note(symbol: Optional[str]=None, note_type: str='observation', content: str='', source: str='', category: Optional[str]=None, base_dir: str=_NOTES_DIR, trigger: Optional[str]=None, expected_action: Optional[str]=None, stop_loss: Optional[str]=None, take_profit: Optional[str]=None) -> dict` — Save a note to JSON file and Neo4j.
 - `load_notes(symbol: Optional[str]=None, note_type: Optional[str]=None, category: Optional[str]=None, base_dir: str=_NOTES_DIR) -> list[dict]` — Load notes from JSON files.
 - `check_lesson_conflicts(new_lesson: dict, base_dir: str=_NOTES_DIR, similarity_threshold: float=0.5) -> list[dict]` — Check if a new lesson conflicts with existing lessons (KIK-564).
+- `get_exit_rules(symbol: Optional[str]=None, base_dir: str=_NOTES_DIR) -> list[dict]` — Load exit-rule notes, optionally filtered by symbol (KIK-566).
+- `check_exit_rule(symbol: str, pnl_pct: float, base_dir: str=_NOTES_DIR) -> Optional[dict]` — Check if a position has hit any exit-rule threshold (KIK-566).
 - `delete_note(note_id: str, base_dir: str=_NOTES_DIR) -> bool` — Delete a note by ID from JSON files.
 
 ### src.data.screen_annotator

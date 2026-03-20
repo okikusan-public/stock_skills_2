@@ -213,6 +213,27 @@ def format_health_check(health_data: dict) -> str:
             lines.append(f"  対象: {members_str}")
         lines.append("")
 
+    # Exit-rule threshold alerts (KIK-566)
+    all_positions = health_data.get("positions", [])
+    exit_rule_alerts = [p for p in all_positions if p.get("exit_rule_hit")]
+    if exit_rule_alerts:
+        for p in exit_rule_alerts:
+            sym = p.get("symbol", "?")
+            hit = p["exit_rule_hit"]
+            if hit["type"] == "stop_loss":
+                emoji = "\U0001f534"  # red circle
+                label = "損切りライン到達"
+            else:
+                emoji = "\U0001f7e2"  # green circle
+                label = "利確ライン到達"
+            pnl = p.get("pnl_pct", 0)
+            lines.append(
+                f"{emoji} {sym}: {label}（{hit['threshold']}、現在 {pnl:+.1f}%）"
+            )
+            if hit.get("reason"):
+                lines.append(f"  理由: {hit['reason']}")
+        lines.append("")
+
     # Alert details
     if alerts:
         lines.append("## アラート詳細")
