@@ -182,6 +182,8 @@ _SCHEMA_CONSTRAINTS = [
     "CREATE CONSTRAINT action_item_id IF NOT EXISTS FOR (a:ActionItem) REQUIRE a.id IS UNIQUE",
     # KIK-547 community detection
     "CREATE CONSTRAINT community_id IF NOT EXISTS FOR (c:Community) REQUIRE c.id IS UNIQUE",
+    # KIK-571 lesson community
+    "CREATE CONSTRAINT lesson_community_name IF NOT EXISTS FOR (lc:LessonCommunity) REQUIRE lc.name IS UNIQUE",
 ]
 
 _SCHEMA_INDEXES = [

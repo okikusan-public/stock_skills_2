@@ -496,8 +496,23 @@ def _append_lessons(
         # KIK-569: Community-based related lessons
         community_lessons = _load_community_lessons(symbol) if symbol else []
 
+        # KIK-571: Theme-based lessons from LessonCommunity
+        theme_lessons = _load_theme_lessons(user_input)
+
         # KIK-569: Select relevant lessons based on user input
-        all_lessons = lessons + community_lessons
+        all_lessons = lessons + community_lessons + theme_lessons
+        # Deduplicate by id
+        seen_ids: set = set()
+        unique_lessons = []
+        for les in all_lessons:
+            lid = les.get("id", "")
+            if lid and lid in seen_ids:
+                continue
+            if lid:
+                seen_ids.add(lid)
+            unique_lessons.append(les)
+        all_lessons = unique_lessons
+
         if user_input and all_lessons:
             all_lessons = _select_relevant_lessons(all_lessons, user_input)
 
@@ -518,6 +533,18 @@ def _load_lessons(symbol: Optional[str] = None) -> list[dict]:
         return note_manager.load_notes(note_type="lesson", symbol=symbol)
     except Exception:
         return []
+
+
+def _load_theme_lessons(user_input: str) -> list[dict]:
+    """Load lessons from matching LessonCommunity based on user intent (KIK-571)."""
+    try:
+        from src.data.lesson_community import infer_theme_from_input, get_lessons_by_theme
+        theme = infer_theme_from_input(user_input)
+        if theme:
+            return get_lessons_by_theme(theme, limit=3)
+    except Exception:
+        pass
+    return []
 
 
 def _load_community_lessons(symbol: str) -> list[dict]:

@@ -201,6 +201,16 @@ def save_note(
     except Exception:
         pass
 
+    # KIK-571: Lesson community classification
+    if note_type == "lesson":
+        try:
+            from src.data.lesson_community import classify_lesson, merge_lesson_community
+            community = classify_lesson(content, trigger or "")
+            merge_lesson_community(note_id, community)
+            note["_lesson_community"] = community
+        except Exception:
+            pass  # graceful degradation
+
     # KIK-564: Attach conflicts to return value
     if lesson_conflicts:
         note["_conflicts"] = lesson_conflicts

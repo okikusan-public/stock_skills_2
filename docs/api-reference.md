@@ -988,6 +988,16 @@ History store save functions (KIK-512 split).
 Backward-compatible shim (KIK-517). Real module: src.data.history
 
 
+### src.data.lesson_community
+
+Lesson community classification and query (KIK-571).
+
+- `classify_lesson(content: str='', trigger: str='') -> str` — Classify a lesson into a thematic community.
+- `merge_lesson_community(note_id: str, community_name: str) -> bool` — Create LessonCommunity node and CATEGORIZED_AS relationship.
+- `get_lessons_by_theme(theme: str, limit: int=5) -> list[dict]` — Get lessons belonging to a specific LessonCommunity.
+- `get_all_lesson_communities() -> list[dict]` — Get all LessonCommunity nodes with their lesson counts.
+- `infer_theme_from_input(user_input: str) -> Optional[str]` — Infer the most relevant LessonCommunity from user input.
+
 ### src.data.lesson_conflict
 
 Unified lesson conflict detection engine (KIK-570).
