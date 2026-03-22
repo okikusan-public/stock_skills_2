@@ -156,7 +156,7 @@
 | **過去検証**: バックテスト、検証、過去の成績 | `backtest` |
 | **What-If**: 追加したら、買ったらどうなる、影響、シミュレーション追加 | `what-if` |
 | **パフォーマンスレビュー**: 売買成績、勝率、損益統計、何%取れた | `review` |
-| **調整アドバイス**: 何を売るべき？、どう直す？、具体的に何をすべき？、処方箋、調整プラン | `adjust` |
+| **調整アドバイス**: 何を売るべき？、どう直す？、具体的に何をすべき？、処方箋、調整プラン、どうしたらいい、アドバイス、改善して、直して、対策、手を打って、アクションプラン、次のアクション、問題点と対策 | `adjust` |
 | **売買→記録**: 買った理由を記録したい、投資理由をメモ | `buy` → `/investment-note save --type thesis` |
 | **損切り→学び**: 損切りの学びを記録、反省メモ | `sell` → `/investment-note save --type lesson` |
 
@@ -211,6 +211,10 @@
 - 「売買成績を見たい」「勝率は？」「損益統計」「何%取れた？」 → `review`
 - 「今年の成績」 → `review --year <今年>`
 - 「NVDAの売買成績」 → `review --symbol NVDA`
+
+**KIK-568: adjust の自然言語判定**:
+- 「PFどうしたらいい？」「PFのアドバイス」「PFを改善して」「PFの対策」「手を打って」→ `adjust`（health未実行でも直接実行）
+- health との判定基準: 「改善」「対策」「アドバイス」「直す」「どうしたらいい」「どうすべき」「アクション」→ adjust優先。「チェック」「確認」「診断」「大丈夫？」→ health
 
 **rebalance の戦略推定**:
 - 「リスクを抑えたい」→ `--strategy defensive`
@@ -394,7 +398,7 @@
 | `/screen-stocks shareholder-return` 結果表示後 | 「安定してるやつだけ見たい」 | → 結果から ✅/📈 のみフィルタ |
 | `/stock-portfolio buy` で購入記録 | 「メモしておいて」「投資理由を記録」 | → `/investment-note save --symbol <銘柄> --type thesis --content ...` |
 | `/stock-portfolio health` で EXIT 判定 | 「学びを記録」「反省メモ」 | → `/investment-note save --symbol <銘柄> --type lesson --content ...` |
-| `/stock-portfolio health` で EXIT 判定 | 「具体的にどうすれば？」「処方箋出して」 | → `/stock-portfolio adjust` |
+| `/stock-portfolio health` で EXIT 判定 | 「具体的にどうすれば？」「処方箋出して」「どうしたらいい」「改善して」「アドバイス」 | → `/stock-portfolio adjust` |
 | `/stock-portfolio health` で EXIT 判定 | 「売って乗り換えたい」「代替を買ったらどうなる？」 | → `what-if --remove "<EXIT銘柄>:SHARES" --add "<代替>:SHARES:PRICE"` |
 | `what-if --remove` 実行後 | 「代替を探して」「乗り換え先を調べて」 | → `/screen-stocks`（同セクターで） |
 | `/graph-query` で過去レポート表示 | 「最新も見たい」「今はどう？」 | → `/stock-report <銘柄>` |
