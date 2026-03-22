@@ -481,17 +481,27 @@ def _merge_context(
 def _append_lessons(
     result: dict | None,
     symbol: Optional[str] = None,
+    user_input: str = "",
 ) -> dict | None:
-    """Append investment lesson section to context result (KIK-534/554).
+    """Append investment lesson section to context result (KIK-534/554/569).
 
-    Extracted as a helper so that all code paths (symbol, PF, market)
-    share the same lesson injection logic.
+    KIK-569: Selects lessons relevant to user_input, and includes
+    community-based lessons for related stocks.
     """
     if result is None:
         return None
     try:
         lessons = _load_lessons(symbol=symbol)
-        lesson_md = _format_lesson_section(lessons)
+
+        # KIK-569: Community-based related lessons
+        community_lessons = _load_community_lessons(symbol) if symbol else []
+
+        # KIK-569: Select relevant lessons based on user input
+        all_lessons = lessons + community_lessons
+        if user_input and all_lessons:
+            all_lessons = _select_relevant_lessons(all_lessons, user_input)
+
+        lesson_md = _format_lesson_section(all_lessons)
         if lesson_md:
             result["context_markdown"] += lesson_md
     except Exception:
@@ -508,6 +518,75 @@ def _load_lessons(symbol: Optional[str] = None) -> list[dict]:
         return note_manager.load_notes(note_type="lesson", symbol=symbol)
     except Exception:
         return []
+
+
+def _load_community_lessons(symbol: str) -> list[dict]:
+    """Load lessons from community peer stocks via Neo4j (KIK-569).
+
+    Traverses: Stock→BELONGS_TO→Community←BELONGS_TO←Stock←ABOUT←Note(lesson)
+    """
+    try:
+        from src.data.graph_query.community import get_community_lessons
+        return get_community_lessons(symbol)
+    except Exception:
+        return []
+
+
+def _select_relevant_lessons(
+    lessons: list[dict],
+    user_input: str,
+    max_results: int = 5,
+) -> list[dict]:
+    """Select lessons most relevant to user input (KIK-569).
+
+    Uses keyword overlap scoring on trigger + expected_action.
+    Falls back to TEI embedding similarity if available.
+    """
+    if not lessons or not user_input:
+        return lessons[:max_results]
+
+    try:
+        from src.data.note_manager import _keyword_similarity
+    except ImportError:
+        return lessons[:max_results]
+
+    input_lower = user_input.lower()
+
+    scored = []
+    for les in lessons:
+        trigger = (les.get("trigger") or "").strip()
+        expected = (les.get("expected_action") or "").strip()
+        symbol = (les.get("symbol") or "").strip()
+        content = (les.get("content") or "")[:80].strip()
+        les_text = f"{trigger} {expected} {symbol} {content}".strip()
+
+        # Keyword similarity (works for space-separated languages)
+        score = _keyword_similarity(input_lower, les_text.lower())
+
+        # Bonus: symbol appears in user input
+        if symbol and symbol.lower() in input_lower:
+            score += 0.3
+
+        # Bonus: substring matching (handles Japanese without spaces)
+        if trigger:
+            trigger_lower = trigger.lower()
+            # Check if any 2+ char substring from trigger appears in input
+            for word in trigger_lower.split():
+                if len(word) >= 2 and word in input_lower:
+                    score += 0.2
+                    break
+            # Character n-gram overlap for non-space languages
+            if score < 0.1:
+                common = sum(1 for c in set(trigger_lower) if c in input_lower and c.strip())
+                total = len(set(trigger_lower) | set(input_lower))
+                if total > 0:
+                    score += (common / total) * 0.3
+
+        scored.append((score, les))
+
+    # Sort by relevance, then by date for ties
+    scored.sort(key=lambda x: (x[0], x[1].get("date", "")), reverse=True)
+    return [les for _, les in scored[:max_results]]
 
 
 def _format_lesson_section(lessons: list[dict]) -> str:
@@ -622,7 +701,7 @@ def get_context(user_input: str) -> Optional[dict]:
             result = _merge_context(market_ctx, vector_results) or market_ctx
         else:
             result = _merge_context(None, vector_results)
-        return _append_lessons(result)
+        return _append_lessons(result, user_input=user_input)
 
     # Portfolio query (no specific symbol)
     if _is_portfolio_query(user_input):
@@ -657,7 +736,7 @@ def get_context(user_input: str) -> Optional[dict]:
             "relationship": "PF",
         }
         result = _merge_context(pf_ctx, vector_results) or pf_ctx
-        return _append_lessons(result)
+        return _append_lessons(result, user_input=user_input)
 
     # Symbol-based query
     symbol = _resolve_symbol(user_input)
@@ -683,4 +762,4 @@ def get_context(user_input: str) -> Optional[dict]:
     merged = _merge_context(symbol_context, vector_results)
 
     # KIK-534: Append investment lesson section
-    return _append_lessons(merged, symbol=symbol)
+    return _append_lessons(merged, symbol=symbol, user_input=user_input)

@@ -558,6 +558,50 @@ def _extract_news_keyword(members: list[str], session) -> Optional[str]:
     return None
 
 
+def get_community_lessons(symbol: str, limit: int = 3) -> list[dict]:
+    """Get lessons from peer stocks in the same community (KIK-569).
+
+    Traverses: Stock→BELONGS_TO→Community←BELONGS_TO←Stock←ABOUT←Note(lesson)
+
+    Returns list of lesson dicts with added '_source_symbol' field
+    to indicate the peer stock the lesson came from.
+    """
+    driver = _common._get_driver()
+    if driver is None:
+        return []
+    try:
+        with driver.session() as session:
+            result = session.run(
+                "MATCH (s:Stock {symbol: $symbol})-[:BELONGS_TO]->(c:Community) "
+                "MATCH (peer:Stock)-[:BELONGS_TO]->(c) "
+                "WHERE peer.symbol <> $symbol "
+                "MATCH (n:Note {type: 'lesson'})-[:ABOUT]->(peer) "
+                "RETURN n.content AS content, n.trigger AS trigger, "
+                "n.expected_action AS expected_action, n.date AS date, "
+                "n.id AS id, peer.symbol AS source_symbol, "
+                "c.name AS community_name "
+                "ORDER BY n.date DESC LIMIT $limit",
+                symbol=symbol,
+                limit=limit,
+            )
+            lessons = []
+            for r in result:
+                les = {
+                    "id": r["id"] or "",
+                    "content": r["content"] or "",
+                    "trigger": r["trigger"] or "",
+                    "expected_action": r["expected_action"] or "",
+                    "date": r["date"] or "",
+                    "symbol": f"{r['source_symbol']}→{r['community_name']}",
+                    "_source_symbol": r["source_symbol"],
+                    "_community": r["community_name"],
+                }
+                lessons.append(les)
+            return lessons
+    except Exception:
+        return []
+
+
 def discover_hidden_themes() -> list[dict]:
     """Discover hidden themes from community patterns (KIK-550).
 
