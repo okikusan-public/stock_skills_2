@@ -237,10 +237,10 @@ class TestGetThemesForSymbolsBatch:
     """Tests for graph_query.get_themes_for_symbols_batch (KIK-452)."""
 
     def test_returns_empty_when_driver_none(self):
-        import src.data.graph_store as gs
-        gs._driver = None
+        from unittest.mock import patch
         from src.data.graph_query import get_themes_for_symbols_batch
-        assert get_themes_for_symbols_batch(["NVDA"]) == {}
+        with patch("src.data.graph_query._common._get_driver", return_value=None):
+            assert get_themes_for_symbols_batch(["NVDA"]) == {}
 
     def test_returns_empty_for_empty_symbols(self):
         from src.data.graph_query import get_themes_for_symbols_batch
