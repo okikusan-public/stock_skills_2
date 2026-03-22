@@ -597,8 +597,8 @@ def _format_lesson_section(lessons: list[dict]) -> str:
     if not lessons:
         return ""
 
-    # KIK-564: Pre-compute conflict pairs
-    conflict_ids = _find_lesson_conflict_pairs(lessons)
+    # KIK-564/570: Pre-compute conflict pairs using unified engine
+    conflict_map = _find_lesson_conflict_pairs(lessons)
 
     lines = ["", "## 投資lesson"]
     for les in lessons[:5]:
@@ -607,11 +607,12 @@ def _format_lesson_section(lessons: list[dict]) -> str:
         expected = les.get("expected_action", "")
         content = (les.get("content", "") or "")[:80]
 
-        # KIK-564: Conflict annotation
+        # KIK-570: Conflict annotation with detail
         conflict_mark = ""
         les_id = les.get("id", "")
-        if les_id in conflict_ids:
-            conflict_mark = "⚠️矛盾候補 "
+        detail = conflict_map.get(les_id, "")
+        if detail:
+            conflict_mark = f"⚠️矛盾候補({detail}) "
 
         if trigger and expected:
             lines.append(f"- {conflict_mark}{symbol_part}{trigger} → {expected}")
@@ -625,43 +626,25 @@ def _format_lesson_section(lessons: list[dict]) -> str:
         if date_str:
             lines[-1] += f" ({date_str})"
 
-    if conflict_ids:
+    if conflict_map:
         lines.append("")
-        lines.append("⚠️ 矛盾候補のlessonがあります。`lesson一覧` で確認・統合を検討してください。")
+        lines.append("⚠️ 矛盾候補のlessonがあります。統合・更新を検討してください。")
 
     return "\n".join(lines)
 
 
-def _find_lesson_conflict_pairs(lessons: list[dict]) -> set[str]:
-    """Find lesson IDs that have potential contradictions (KIK-564).
+def _find_lesson_conflict_pairs(lessons: list[dict]) -> dict[str, str]:
+    """Find lesson IDs with contradictions using unified engine (KIK-570).
 
-    Uses keyword similarity on trigger+expected_action to detect pairs
-    with similar triggers but different actions.
+    Returns {lesson_id: conflict_detail} for annotated display.
     """
-    conflict_ids: set[str] = set()
     if len(lessons) < 2:
-        return conflict_ids
-
+        return {}
     try:
-        from src.data.note_manager import _keyword_similarity
+        from src.data.lesson_conflict import find_conflict_pairs
+        return find_conflict_pairs(lessons)
     except ImportError:
-        return conflict_ids
-
-    for i, a in enumerate(lessons):
-        for b in lessons[i + 1:]:
-            a_trigger = (a.get("trigger") or "").strip()
-            b_trigger = (b.get("trigger") or "").strip()
-            if not a_trigger or not b_trigger:
-                continue
-            a_action = (a.get("expected_action") or "").strip()
-            b_action = (b.get("expected_action") or "").strip()
-            # Similar trigger but different action = potential conflict
-            trigger_sim = _keyword_similarity(a_trigger, b_trigger)
-            if trigger_sim > 0.3 and a_action != b_action and a_action and b_action:
-                conflict_ids.add(a.get("id", ""))
-                conflict_ids.add(b.get("id", ""))
-
-    return conflict_ids
+        return {}
 
 
 # ---------------------------------------------------------------------------

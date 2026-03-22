@@ -988,6 +988,18 @@ History store save functions (KIK-512 split).
 Backward-compatible shim (KIK-517). Real module: src.data.history
 
 
+### src.data.lesson_conflict
+
+Unified lesson conflict detection engine (KIK-570).
+
+- `tokenize(text: str) -> list[str]` — Tokenize text into words, handling CJK characters.
+- `keyword_similarity(text_a: str, text_b: str) -> float` — Compute Jaccard similarity using CJK-aware tokenization.
+- `extract_trigger(lesson: dict) -> str` — Extract trigger from lesson, falling back to content parsing.
+- `extract_action(lesson: dict) -> str` — Extract expected_action from lesson, falling back to content parsing.
+- `embedding_similarity(text_a: str, text_b: str) -> Optional[float]` — Compute cosine similarity via TEI embeddings. Returns None if unavailable.
+- `find_conflicts(new_lesson: dict, existing_lessons: list[dict], similarity_threshold: float=0.5, max_results: int=5) -> list[dict]` — Detect conflicts between a new lesson and existing lessons.
+- `find_conflict_pairs(lessons: list[dict]) -> dict[str, str]` — Find lesson IDs with potential contradictions.
+
 ### src.data.linear_client (KIK-472)
 
 Linear API client for action item management (KIK-472).
@@ -1003,7 +1015,7 @@ Note manager -- dual-write to JSON files and Neo4j (KIK-397, KIK-429).
 
 - `save_note(symbol: Optional[str]=None, note_type: str='observation', content: str='', source: str='', category: Optional[str]=None, base_dir: str=_NOTES_DIR, trigger: Optional[str]=None, expected_action: Optional[str]=None, stop_loss: Optional[str]=None, take_profit: Optional[str]=None) -> dict` — Save a note to JSON file and Neo4j.
 - `load_notes(symbol: Optional[str]=None, note_type: Optional[str]=None, category: Optional[str]=None, base_dir: str=_NOTES_DIR) -> list[dict]` — Load notes from JSON files.
-- `check_lesson_conflicts(new_lesson: dict, base_dir: str=_NOTES_DIR, similarity_threshold: float=0.5) -> list[dict]` — Check if a new lesson conflicts with existing lessons (KIK-564).
+- `check_lesson_conflicts(new_lesson: dict, base_dir: str=_NOTES_DIR, similarity_threshold: float=0.5) -> list[dict]` — Check if a new lesson conflicts with existing lessons (KIK-564/570).
 - `get_exit_rules(symbol: Optional[str]=None, base_dir: str=_NOTES_DIR) -> list[dict]` — Load exit-rule notes, optionally filtered by symbol (KIK-566).
 - `check_exit_rule(symbol: str, pnl_pct: float, base_dir: str=_NOTES_DIR) -> Optional[dict]` — Check if a position has hit any exit-rule threshold (KIK-566).
 - `delete_note(note_id: str, base_dir: str=_NOTES_DIR) -> bool` — Delete a note by ID from JSON files.

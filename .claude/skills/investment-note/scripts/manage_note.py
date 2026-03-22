@@ -47,6 +47,18 @@ def cmd_save(args):
         print(f"  トリガー: {note['trigger']}")
     if note.get("expected_action"):
         print(f"  次回アクション: {note['expected_action']}")
+    # KIK-570: Show conflict warnings
+    conflicts = note.get("_conflicts", [])
+    if conflicts:
+        print()
+        for c in conflicts:
+            ex = c.get("existing_lesson", {})
+            sim = c.get("similarity", 0)
+            ctype = c.get("conflict_type", "similar")
+            detail = c.get("conflict_detail", "")
+            ex_content = (ex.get("content") or "")[:50]
+            label = "⚠️ 矛盾候補" if ctype == "contradicting_action" else "📝 類似lesson"
+            print(f"  {label} (類似度: {sim:.2f}): {detail or ex_content}")
     # KIK-473: show detected symbols for journal notes
     detected = note.get("detected_symbols", [])
     if detected:
