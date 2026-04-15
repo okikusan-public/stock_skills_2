@@ -1121,6 +1121,17 @@ Note manager -- dual-write to JSON files and Neo4j (KIK-397, KIK-429).
 - `check_exit_rule(symbol: str, pnl_pct: float, base_dir: str=_NOTES_DIR) -> Optional[dict]` — Check if a position has hit any exit-rule threshold (KIK-566).
 - `delete_note(note_id: str, base_dir: str=_NOTES_DIR) -> bool` — Delete a note by ID from JSON files.
 
+### src.data.user_profile
+
+User profile settings loader (KIK-599).
+
+- `get_profile() -> dict` — Load user profile. Returns defaults if file missing.
+- `get_fee(region: str, amount_local: float, is_sell: bool=False) -> dict` — Calculate trading fee for a region and amount.
+- `get_tax_cost(gain_jpy: float) -> dict` — Calculate tax on capital gains.
+- `get_broker_info() -> dict` — Get broker name and account type.
+- `needs_tax_filing() -> bool` — Check if tax filing is required.
+- `reset_cache()` — Clear cached profile (for testing).
+
 ### src.data.yahoo_client._cache
 
 Cache helpers for yahoo_client (KIK-449).
