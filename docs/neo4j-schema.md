@@ -4,7 +4,7 @@
 
 ---
 
-## Node Types (23)
+## Node Types (24)
 
 ### Stock
 中心ノード。すべてのアクティビティがこのノードに接続される。
@@ -257,6 +257,19 @@ stock/business: positive/negative。industry: trend/growth_driver/risk/regulator
 | level | int | 階層レベル (0 = 最細) |
 | created_at | string | 作成日時 (ISO 8601) |
 
+### ThemeTrend (KIK-603)
+テーマトレンド検出記録。`--auto-theme` 実行時に Grok が検出したトレンドテーマを記録。FOR_THEME リレーションで Theme ノードに接続。
+
+| Property | Type | Description |
+|:---|:---|:---|
+| id | string (UNIQUE) | `theme_trend_{date}_{theme}_{region}` |
+| date | string | 検出日 (YYYY-MM-DD) |
+| theme | string | テーマキー (e.g. ai, ev, cybersecurity) |
+| confidence | float | Grok 信頼度 (0.0-1.0) |
+| reason | string | 注目理由 |
+| rank | int | 検出バッチ内ランク (1 = 最高信頼度) |
+| region | string | 検出対象地域 (e.g. japan, us) |
+
 ---
 
 ## Relationships
@@ -297,6 +310,7 @@ graph LR
     ActionItem -- TARGETS --> Stock
     HealthCheck -- TRIGGERED --> ActionItem
     Stock -- BELONGS_TO --> Community
+    ThemeTrend -- FOR_THEME --> Theme
 ```
 
 | Relationship | From | To | Description |
@@ -327,10 +341,11 @@ graph LR
 | STRESSED | StressTest | Stock | ストレステスト対象銘柄 (KIK-428)。プロパティ: impact (推定損失率) |
 | FORECASTED | Forecast | Stock | フォーキャスト対象銘柄 (KIK-428)。プロパティ: optimistic, base, pessimistic (各シナリオリターン) |
 | BELONGS_TO | Stock | Community | コミュニティへの所属 (KIK-547) |
+| FOR_THEME | ThemeTrend | Theme | テーマトレンド検出の対象テーマ (KIK-603) |
 
 ---
 
-## Constraints (23)
+## Constraints (24)
 
 ```cypher
 CREATE CONSTRAINT stock_symbol IF NOT EXISTS FOR (s:Stock) REQUIRE s.symbol IS UNIQUE
@@ -361,9 +376,11 @@ CREATE CONSTRAINT forecast_id IF NOT EXISTS FOR (f:Forecast) REQUIRE f.id IS UNI
 CREATE CONSTRAINT action_item_id IF NOT EXISTS FOR (a:ActionItem) REQUIRE a.id IS UNIQUE
 -- KIK-547 community detection
 CREATE CONSTRAINT community_id IF NOT EXISTS FOR (c:Community) REQUIRE c.id IS UNIQUE
+-- KIK-603 theme trend
+CREATE CONSTRAINT theme_trend_id IF NOT EXISTS FOR (tt:ThemeTrend) REQUIRE tt.id IS UNIQUE
 ```
 
-## Indexes (18)
+## Indexes (20)
 
 ```cypher
 CREATE INDEX stock_sector IF NOT EXISTS FOR (s:Stock) ON (s.sector)
@@ -388,6 +405,9 @@ CREATE INDEX action_item_status IF NOT EXISTS FOR (a:ActionItem) ON (a.status)
 -- KIK-547 community detection
 CREATE INDEX community_level IF NOT EXISTS FOR (c:Community) ON (c.level)
 CREATE INDEX community_created IF NOT EXISTS FOR (c:Community) ON (c.created_at)
+-- KIK-603 theme trend
+CREATE INDEX theme_trend_date IF NOT EXISTS FOR (tt:ThemeTrend) ON (tt.date)
+CREATE INDEX theme_trend_theme IF NOT EXISTS FOR (tt:ThemeTrend) ON (tt.theme)
 ```
 
 ## Vector Indexes (9) — KIK-420/428
@@ -547,6 +567,24 @@ RETURN f.date AS date, f.optimistic AS optimistic,
        f.base AS base, f.pessimistic AS pessimistic,
        f.total_value_jpy AS total_value_jpy
 ORDER BY f.date DESC LIMIT 5
+```
+
+### 15. テーマトレンド履歴 (KIK-603)
+```cypher
+MATCH (tt:ThemeTrend)
+RETURN tt.date AS date, tt.theme AS theme, tt.confidence AS confidence,
+       tt.reason AS reason, tt.rank AS rank, tt.region AS region
+ORDER BY tt.date DESC, tt.rank ASC LIMIT 20
+```
+
+### 16. テーマトレンド差分（直近2回の比較） (KIK-603)
+```cypher
+MATCH (tt:ThemeTrend)
+WITH DISTINCT tt.date AS date ORDER BY date DESC LIMIT 2
+WITH collect(date) AS dates
+MATCH (tt:ThemeTrend) WHERE tt.date IN dates
+RETURN tt.date AS date, tt.theme AS theme, tt.confidence AS confidence
+ORDER BY tt.date DESC, tt.rank ASC
 ```
 
 ---

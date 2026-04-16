@@ -49,6 +49,8 @@ _TEMPLATES = [
     # KIK-428 stress test / forecast
     (r"前回.*ストレステスト|ストレステスト.*履歴|ストレス.*結果", "stress_test_history", _extract_symbol),
     (r"フォーキャスト.*推移|前回.*見通し|予測.*履歴|forecast.*履歴", "forecast_history", _extract_symbol),
+    # KIK-603 theme trend
+    (r"テーマ.*推移|テーマ.*トレンド|テーマ.*履歴|トレンドテーマ.*履歴|theme.*trend", "theme_trends", None),
 ]
 
 _COMPILED = [(re.compile(pat, re.IGNORECASE), qtype, extractor) for pat, qtype, extractor in _TEMPLATES]
@@ -162,6 +164,10 @@ def _execute(query_type: str, params: dict):
     if query_type == "forecast_history":
         symbol = params.get("symbol")
         return graph_query.get_forecast_history(symbol=symbol)
+
+    # KIK-603
+    if query_type == "theme_trends":
+        return graph_query.get_theme_trends()
 
     return None
 
@@ -373,6 +379,24 @@ def _fmt_forecast_history(result, params: dict) -> str:
     return "\n".join(lines)
 
 
+def _fmt_theme_trends(result, params: dict) -> str:
+    if not result:
+        return "テーマトレンドの履歴は見つかりませんでした。"
+    lines = ["## テーマトレンド履歴 (KIK-603)\n",
+             "| 日付 | テーマ | 信頼度 | ランク | 地域 | 理由 |",
+             "|:-----|:-------|:-------|:-------|:-----|:-----|"]
+    for r in result:
+        conf = r.get("confidence")
+        conf_str = f"{conf:.2f}" if conf is not None else "-"
+        reason = (r.get("reason") or "-")[:60]
+        lines.append(
+            f"| {r.get('date', '-')} | {r.get('theme', '-')} "
+            f"| {conf_str} | {r.get('rank', '-')} "
+            f"| {r.get('region', '-')} | {reason} |"
+        )
+    return "\n".join(lines)
+
+
 _FORMATTERS = {
     "prior_report": _fmt_prior_report,
     "recurring_picks": _fmt_recurring_picks,
@@ -390,4 +414,6 @@ _FORMATTERS = {
     # KIK-428
     "stress_test_history": _fmt_stress_test_history,
     "forecast_history": _fmt_forecast_history,
+    # KIK-603
+    "theme_trends": _fmt_theme_trends,
 }

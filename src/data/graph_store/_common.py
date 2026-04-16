@@ -184,6 +184,8 @@ _SCHEMA_CONSTRAINTS = [
     "CREATE CONSTRAINT community_id IF NOT EXISTS FOR (c:Community) REQUIRE c.id IS UNIQUE",
     # KIK-571 lesson community
     "CREATE CONSTRAINT lesson_community_name IF NOT EXISTS FOR (lc:LessonCommunity) REQUIRE lc.name IS UNIQUE",
+    # KIK-603 theme trend
+    "CREATE CONSTRAINT theme_trend_id IF NOT EXISTS FOR (tt:ThemeTrend) REQUIRE tt.id IS UNIQUE",
 ]
 
 _SCHEMA_INDEXES = [
@@ -209,6 +211,9 @@ _SCHEMA_INDEXES = [
     # KIK-547 community detection indexes
     "CREATE INDEX community_level IF NOT EXISTS FOR (c:Community) ON (c.level)",
     "CREATE INDEX community_created IF NOT EXISTS FOR (c:Community) ON (c.created_at)",
+    # KIK-603 theme trend indexes
+    "CREATE INDEX theme_trend_date IF NOT EXISTS FOR (tt:ThemeTrend) ON (tt.date)",
+    "CREATE INDEX theme_trend_theme IF NOT EXISTS FOR (tt:ThemeTrend) ON (tt.theme)",
 ]
 
 # KIK-420: Vector indexes for semantic search

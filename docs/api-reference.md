@@ -859,10 +859,12 @@ Community query functions (KIK-578 split from community.py).
 
 ### src.data.graph_query.market
 
-MarketContext/Indicator/UpcomingEvent graph queries.
+MarketContext/Indicator/UpcomingEvent/ThemeTrend graph queries.
 
 - `get_recent_market_context() -> Optional[dict]` — Get the most recent MarketContext node.
 - `get_upcoming_events(limit: int=10, within_days: int=None) -> list[dict]` — Get UpcomingEvent nodes from the most recent MarketContext.
+- `get_theme_trends(limit: int=20, region: str='') -> list[dict]` — Get recent theme trend history.
+- `get_theme_trend_diff() -> dict` — Compare the latest two theme detections to find rising/falling themes.
 
 ### src.data.graph_query.nl_query (KIK-411: 自然言語グラフクエリ)
 
@@ -947,6 +949,7 @@ MarketContext node operations (KIK-507).
 
 - `merge_market_context(context_date: str, indices: list[dict], semantic_summary: str='', embedding: list[float] | None=None) -> bool` — Create/update a MarketContext node with index snapshots.
 - `merge_market_context_full(context_date: str, indices: list[dict], grok_research: dict | None=None, semantic_summary: str='', embedding: list[float] | None=None) -> bool` — Create MarketContext with semantic sub-nodes (KIK-413).
+- `merge_theme_trend(theme: str, date: str, confidence: float=0.0, reason: str='', rank: int=0, region: str='') -> bool` — Save a theme trend detection to Neo4j.
 
 ### src.data.graph_store.note
 

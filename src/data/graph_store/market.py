@@ -2,6 +2,7 @@
 
 Handles merge_market_context, merge_market_context_full,
 and sub-nodes (Indicator, UpcomingEvent, SectorRotation, Sentiment).
+Also handles ThemeTrend nodes (KIK-603).
 """
 
 import json as _json
@@ -136,6 +137,71 @@ def merge_market_context_full(
                     mid=context_id,
                 )
 
+        return True
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
+# ThemeTrend node (KIK-603)
+# ---------------------------------------------------------------------------
+
+def merge_theme_trend(
+    theme: str,
+    date: str,
+    confidence: float = 0.0,
+    reason: str = "",
+    rank: int = 0,
+    region: str = "",
+) -> bool:
+    """Save a theme trend detection to Neo4j.
+
+    Creates a ThemeTrend node and links it to the corresponding Theme node
+    via a FOR_THEME relationship.
+
+    Parameters
+    ----------
+    theme : str
+        Theme key (e.g. "ai", "ev", "cybersecurity").
+    date : str
+        Detection date (YYYY-MM-DD).
+    confidence : float
+        Grok confidence score (0.0-1.0).
+    reason : str
+        Why the theme is trending.
+    rank : int
+        Rank within the detection batch (1 = highest confidence).
+    region : str
+        Market region used for detection (e.g. "japan", "us").
+
+    Returns
+    -------
+    bool
+        True on success, False on any failure.
+    """
+    if _common._get_mode() == "off":
+        return False
+    driver = _common._get_driver()
+    if driver is None:
+        return False
+    trend_id = f"theme_trend_{date}_{theme}_{region}"
+    try:
+        with driver.session() as session:
+            session.run(
+                "MERGE (tt:ThemeTrend {id: $id}) "
+                "SET tt.date = $date, tt.theme = $theme, "
+                "    tt.confidence = $confidence, tt.reason = $reason, "
+                "    tt.rank = $rank, tt.region = $region "
+                "MERGE (t:Theme {name: $theme}) "
+                "MERGE (tt)-[:FOR_THEME]->(t)",
+                id=trend_id,
+                date=date,
+                theme=_common._truncate(theme, 100),
+                confidence=float(confidence),
+                reason=_common._truncate(reason, 500),
+                rank=int(rank),
+                region=_common._truncate(region, 50),
+            )
         return True
     except Exception:
         return False
