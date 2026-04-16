@@ -16,6 +16,7 @@ from src.core.health.quality import check_change_quality
 from src.core.health.alert import compute_alert_level, ALERT_NONE
 from src.core.health.labels import check_long_term_suitability
 from src.core.health.community import _compute_community_concentration
+from src.core.health.theme import _compute_theme_exposure
 from src.core.value_trap import detect_value_trap as _detect_value_trap
 
 
@@ -168,6 +169,11 @@ def run_health_check(csv_path: str, client) -> dict:
         results, eval_by_symbol, total_value,
     )
 
+    # KIK-604: Theme exposure analysis
+    theme_exposure = _compute_theme_exposure(
+        results, eval_by_symbol, total_value,
+    )
+
     # KIK-469 Phase 2: Partition positions into stocks and ETFs
     stock_positions = [
         r for r in results
@@ -189,4 +195,5 @@ def run_health_check(csv_path: str, client) -> dict:
         },
         "small_cap_allocation": small_cap_alloc,
         "community_concentration": community_concentration,
+        "theme_exposure": theme_exposure,
     }

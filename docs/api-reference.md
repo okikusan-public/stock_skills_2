@@ -68,6 +68,11 @@ Portfolio health check orchestrator (KIK-576).
 
 - `run_health_check(csv_path: str, client) -> dict` — Run health check on all portfolio holdings.
 
+### src.core.health.theme
+
+Theme exposure analysis for portfolio health checks (KIK-604).
+
+
 ### src.core.health.trend
 
 Trend health analysis for portfolio health checks (KIK-576).

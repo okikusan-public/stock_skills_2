@@ -24,6 +24,8 @@ __all__ = [
     "run_health_check",
     # Community concentration (private but used by tests/other modules)
     "_compute_community_concentration",
+    # Theme exposure (KIK-604)
+    "_compute_theme_exposure",
     # ETF health
     "check_etf_health",
     # Labels / long-term suitability
@@ -60,6 +62,9 @@ from src.core.health.runner import run_health_check  # noqa: F401
 
 # Community concentration (private but used by tests)
 from src.core.health.community import _compute_community_concentration  # noqa: F401
+
+# Theme exposure (KIK-604)
+from src.core.health.theme import _compute_theme_exposure  # noqa: F401
 
 # ETF health
 from src.core.health.etf import check_etf_health  # noqa: F401

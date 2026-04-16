@@ -213,6 +213,37 @@ def format_health_check(health_data: dict) -> str:
             lines.append(f"  対象: {members_str}")
         lines.append("")
 
+    # Theme exposure analysis (KIK-604)
+    theme_exposure = health_data.get("theme_exposure")
+    if theme_exposure:
+        pf_themes = theme_exposure.get("pf_themes", {})
+        gap = theme_exposure.get("gap", [])
+
+        if pf_themes or gap:
+            lines.append("## 📊 テーマ構成分析")
+            lines.append("")
+
+        if pf_themes:
+            lines.append("### PFテーマ構成")
+            lines.append("| テーマ | 銘柄数 | ウェイト | 銘柄 |")
+            lines.append("|:---|:---|:---|:---|")
+            for theme_name, data in pf_themes.items():
+                count = len(data["symbols"])
+                weight_pct = f"{data['weight'] * 100:.1f}%"
+                syms = ", ".join(data["symbols"])
+                lines.append(f"| {theme_name} | {count} | {weight_pct} | {syms} |")
+            lines.append("")
+
+        if gap:
+            lines.append("### テーマギャップ（トレンドテーマ x PF未保有）")
+            for g in gap:
+                theme = g["theme"]
+                stock_count = g.get("stock_count", 0)
+                lines.append(
+                    f"- {theme}: 関連銘柄 {stock_count} -- PFに該当銘柄なし"
+                )
+            lines.append("")
+
     # Exit-rule threshold alerts (KIK-566)
     all_positions = health_data.get("positions", [])
     exit_rule_alerts = [p for p in all_positions if p.get("exit_rule_hit")]
