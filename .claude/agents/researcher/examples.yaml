@@ -3,7 +3,7 @@
 # 全パターンで最初に GraphRAG で過去のリサーチ履歴を確認する。
 
 examples:
-  # --- 銘柄リサーチ (stock) ---
+  # === 銘柄リサーチ (stock) ===
   - intent: "トヨタの最新ニュース"
     steps:
       - tool: graphrag.get_context
@@ -31,7 +31,44 @@ examples:
       - judge: "ポジ/ネガ意見 + スコア(-1.0〜1.0)を提示"
     reasoning: "センチメント特化。stock_deep は不要"
 
-  # --- 業界分析 (industry) ---
+  # === 過去との差分分析 ===
+  - intent: "NVDAの前回調べた時からの変化は？"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "NVDAの変化" }
+      - tool: grok.search_stock_deep
+        params: { symbol: "NVDA", company_name: "NVIDIA" }
+      - judge: |
+          前回リサーチ（コンテキストから取得）との差分を明示:
+          - 新しいカタリスト（前回にはなかった材料）
+          - センチメント変化（前回スコアとの比較）
+          - ニュースの方向性変化（ポジ→ネガ、ネガ→ポジ等）
+    reasoning: "差分分析。前回データがあれば必ず比較する"
+
+  # === 複合質問 ===
+  - intent: "トヨタのニュースとビジネスモデルを教えて"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "トヨタ ニュース ビジネスモデル" }
+      - tool: grok.search_stock_deep
+        params: { symbol: "7203.T", company_name: "トヨタ自動車" }
+      - tool: grok.search_business
+        params: { symbol: "7203.T", company_name: "トヨタ自動車" }
+      - judge: "ニュース + ビジネスモデルを統合。事業への影響を分析"
+    reasoning: "複合質問 → stock_deep + business の両方を実行し統合"
+
+  # === RECENT モード ===
+  - intent: "NVDAの最新は？（前回リサーチが1週間前）"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "NVDAの最新" }
+      - judge: "鮮度=RECENT → 差分のみ取得。前回との変化点に焦点"
+      - tool: grok.search_x_sentiment
+        params: { symbol: "NVDA", company_name: "NVIDIA" }
+      - judge: "センチメント変化のみ報告。フルリサーチはしない"
+    reasoning: "RECENT → 軽量更新。全項目再取得はしない"
+
+  # === 業界分析 (industry) ===
   - intent: "半導体業界の動向"
     steps:
       - tool: graphrag.get_context
@@ -50,7 +87,7 @@ examples:
       - judge: "トレンド + プレイヤー + 政策動向"
     reasoning: "テーマ→業界分析。年号を付けて最新情報を優先"
 
-  # --- マーケット概況 (market) ---
+  # === マーケット概況 (market) ===
   - intent: "今の相場は？"
     steps:
       - tool: graphrag.get_context
@@ -67,7 +104,7 @@ examples:
       - judge: "米国市場のセンチメント + 注目イベント"
     reasoning: "地域を絞った市況照会"
 
-  # --- ビジネスモデル分析 (business) ---
+  # === ビジネスモデル分析 (business) ===
   - intent: "トヨタのビジネスモデル"
     steps:
       - tool: grok.search_business
@@ -82,7 +119,7 @@ examples:
       - judge: "セグメント別売上 + 成長ドライバー + モート分析"
     reasoning: "収益構造への質問 → business 検索"
 
-  # --- トレンドテーマ検出 (trending) ---
+  # === トレンドテーマ検出 (trending) ===
   - intent: "今熱いテーマは？"
     steps:
       - tool: grok.get_trending_themes
@@ -97,7 +134,7 @@ examples:
       - judge: "米国市場の注目テーマ + ドライバー"
     reasoning: "地域指定あり"
 
-  # --- Grok未設定時のフォールバック ---
+  # === Grok未設定時のフォールバック ===
   - intent: "NVDAのニュース（Grok未設定）"
     steps:
       - check: "grok.is_available() == False"
@@ -106,7 +143,16 @@ examples:
       - judge: "WebSearch結果を要約。Xセンチメントは取得不可と明示"
     reasoning: "Grok未設定 → WebSearchで代替。センチメントは非対応"
 
-# ツール側の責務（エージェントは意識不要）
+  - intent: "半導体業界を調べて（Grok未設定）"
+    steps:
+      - check: "grok.is_available() == False"
+      - tool: WebSearch
+        params: { query: "半導体 semiconductor industry trends 2026" }
+      - tool: WebSearch
+        params: { query: "semiconductor market outlook key players" }
+      - judge: "複数WebSearch結果を統合。Grok未設定で精度が落ちる旨を明示"
+    reasoning: "業界分析のフォールバック。複数クエリで補完"
+
 tool_responsibilities:
   - grok: API呼び出しのみ（ニュース/センチメント/業界/市場/ビジネス検索）
   - graphrag: 過去データ取得・保存のみ（判断ロジックなし）

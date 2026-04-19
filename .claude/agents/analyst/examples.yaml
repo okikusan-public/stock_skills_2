@@ -2,7 +2,7 @@
 # 数値はサンプル。エージェントが自律的に判断する。
 
 examples:
-  # --- 個別株分析 ---
+  # === 個別株分析 ===
   - intent: "トヨタってどう？"
     steps:
       - tool: graphrag.get_context
@@ -31,7 +31,20 @@ examples:
       - judge: "配当 + 自社株買い = 総還元率を計算"
     reasoning: "株主還元に焦点。get_stock_detail で詳細財務データが必要"
 
-  # --- ETF分析 ---
+  # === ASEAN株推論 ===
+  - intent: "DBS銀行ってどう？"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "DBS銀行" }
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "D05.SI" }
+      - tool: yahoo_finance.get_price_history
+        params: { symbol: "D05.SI", period: "1y" }
+      - code: "RSI(14), SMA50, SMA200 を計算。SGD建てに注意"
+      - judge: "バリュエーション + ASEAN銀行セクター比較"
+    reasoning: "企業名→SGXティッカー推論。SGX100株単位・SGD建てを考慮"
+
+  # === ETF分析 ===
   - intent: "VGKってどう？"
     steps:
       - tool: yahoo_finance.get_stock_info
@@ -46,24 +59,95 @@ examples:
       - judge: "経費率を取得し、水準を評価（<0.1%優良/<0.3%良好/<0.5%標準）"
     reasoning: "ETF経費率に特化した質問"
 
-  # --- コンテキスト活用 ---
-  - intent: "前に調べた銘柄の最新は？"
+  - intent: "XLKってどう？"
     steps:
-      - tool: graphrag.get_context
-        params: { user_input: "前に調べた銘柄" }
-      - judge: "コンテキストから銘柄を特定し、最新データを取得して差分を提示"
-    reasoning: "GraphRAGでベクトル検索→過去の分析対象を特定"
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "XLK" }
+      - judge: "セクターETF → 経費率 + AUM + 組入上位銘柄 + セクター動向"
+    reasoning: "セクターETFはセクター全体の代替。組入銘柄の集中度も評価"
 
+  - intent: "AGGはどう？"
+    steps:
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "AGG" }
+      - judge: "債券ETF → 経費率 + 利回り + デュレーション + 金利感応度"
+    reasoning: "債券ETFはPER/PBR不適用。利回りとデュレーションで評価"
+
+  # === バリュートラップ数値例 ===
   - intent: "バリュートラップじゃない？"
     steps:
       - tool: yahoo_finance.get_stock_info
         params: { symbol: "<直前の銘柄>" }
       - tool: yahoo_finance.get_stock_detail
         params: { symbol: "<直前の銘柄>" }
-      - judge: "低PER + 利益減少トレンド → バリュートラップ判定"
-    reasoning: "直前の会話から銘柄を引き継ぎ。EPS成長率を確認"
+      - judge: |
+          バリュートラップ判定:
+          PER < 10 かつ EPS成長率 < -5% → バリュートラップの疑い
+          PER < 10 かつ EPS成長率 > 0% → 真の割安
+          低PBR + ROE低下トレンド → 資産の質劣化リスク
+    reasoning: "数値基準を明示。EPS成長率の推移が判定の鍵"
 
-# ツール側の責務（エージェントは意識不要）
+  # === 逆張りシグナル数値例 ===
+  - intent: "逆張りで入れる？"
+    steps:
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "<直前の銘柄>" }
+      - tool: yahoo_finance.get_price_history
+        params: { symbol: "<直前の銘柄>", period: "6mo" }
+      - code: "RSI(14), BB(20,2), 出来高比を計算"
+      - judge: |
+          逆張りシグナル判定:
+          RSI < 30 + BB下限割れ + ファンダ堅調(ROE>5%) → 買いシグナル
+          RSI < 20 + 出来高急増 → セリングクライマックスの可能性
+          RSI < 30 でもEPS成長率がマイナス → 逆張り非推奨
+    reasoning: "テクニカル + ファンダの複合判定。RSI単体では判断しない"
+
+  # === コンテキスト鮮度分岐 ===
+  - intent: "前に調べた銘柄の最新は？（FRESH）"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "前に調べた銘柄" }
+      - judge: "鮮度=FRESH（24h以内）→ コンテキストのみで回答。API再取得しない"
+    reasoning: "FRESH → 前回データで十分。API節約"
+
+  - intent: "前に調べた銘柄の最新は？（RECENT）"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "前に調べた銘柄" }
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "<コンテキストから特定>" }
+      - judge: "鮮度=RECENT（7日以内）→ 差分のみ更新。前回との変化を示す"
+    reasoning: "RECENT → 差分モード。前回値との比較に焦点"
+
+  - intent: "7203.Tを調べて（STALE/NONE）"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "7203.T" }
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "7203.T" }
+      - tool: yahoo_finance.get_stock_detail
+        params: { symbol: "7203.T" }
+      - tool: yahoo_finance.get_price_history
+        params: { symbol: "7203.T", period: "1y" }
+      - code: "RSI, SMA, 割安度スコア, 還元率を全て計算"
+      - judge: "フル分析。全セクションを出力"
+    reasoning: "STALE/NONE → フル取得。全項目を新規計算"
+
+  # === 保有 vs 未保有 ===
+  - intent: "7203.T を分析（保有中）"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "7203.T" }
+      - judge: "保有銘柄 → 取得単価からの含み損益・テーゼとの整合性を追加表示"
+    reasoning: "コンテキストに BOUGHT あり → 保有者視点でコメントを追加"
+
+  - intent: "MSFT を分析（未保有・ウォッチ中）"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "MSFT" }
+      - judge: "ウォッチ中 → 買い時かの判断材料を中心に。前回レポートとの差分"
+    reasoning: "コンテキストに BOOKMARKED あり → 購入検討者視点"
+
 tool_responsibilities:
   - yahoo_finance: データ取得のみ（株価・財務・価格履歴）
   - graphrag: 過去データ取得・保存のみ（判断ロジックなし）

@@ -2,42 +2,70 @@
 # 数値はサンプル。エージェントがユーザーの意図・市場状況に応じて自律的に調整する。
 
 examples:
-  # --- 割安系 ---
+  # === 割安系 ===
   - intent: "割安な日本株"
     params: { region: japan, preset: value, max_per: 15, max_pbr: 1.5, min_roe: 0.08 }
+    scoring: "PER(25)+PBR(25)+配当(20)+ROE(15)+成長(15)=100点"
     reasoning: "一般的な割安基準。市場環境によって緩めても良い"
 
   - intent: "超割安株"
     params: { region: japan, preset: deep-value, max_per: 8, max_pbr: 0.5 }
-    reasoning: "ディープバリュー。流動性リスクに注意"
+    scoring: "PER(30)+PBR(30)+配当(20)+ROE(10)+成長(10)=100点"
+    reasoning: "ディープバリュー。PER/PBR の配分を高め。流動性リスクに注意"
 
-  # --- 配当系 ---
+  # === 配当系 ===
   - intent: "米国の高配当株"
     params: { region: us, preset: high-dividend, min_dividend_yield: 0.03, min_roe: 0.10 }
-    reasoning: "米国の配当基準は3%以上が目安"
+    scoring: "配当(35)+PER(20)+PBR(15)+ROE(15)+成長(15)=100点"
+    reasoning: "配当利回りの配分を最大化。米国の配当基準は3%以上が目安"
 
   - intent: "株主還元が厚い株"
     params: { region: japan, preset: shareholder-return, min_total_return: 0.05 }
+    scoring: "総還元率(30)+PER(20)+PBR(15)+ROE(20)+成長(15)=100点"
     reasoning: "配当+自社株買いの総還元率で評価"
 
-  # --- 成長系 ---
+  # === 成長系 ===
   - intent: "グロース株"
     params: { region: japan, preset: growth, min_revenue_growth: 0.15, min_roe: 0.12 }
-    reasoning: "純成長。割安制約なし"
+    scoring: "成長(30)+ROE(25)+PER(20)+PBR(15)+配当(10)=100点"
+    reasoning: "成長率とROEの配分を高め。PER/PBR制約は緩め"
+
+  - intent: "成長と割安のバランスが良い株"
+    params: { region: japan, preset: growth-value, min_revenue_growth: 0.10, max_per: 20, min_roe: 0.10 }
+    scoring: "PER(20)+PBR(20)+成長(25)+ROE(20)+配当(15)=100点"
+    reasoning: "成長と割安を均等に評価。GARP（Growth At Reasonable Price）戦略"
 
   - intent: "爆発的に成長してる株"
     params: { region: us, preset: high-growth, min_revenue_growth: 0.20, max_psr: 20 }
-    reasoning: "売上成長率重視。赤字でも可"
+    scoring: "売上成長(40)+ROE(20)+PSR(20)+マージン改善(20)=100点"
+    reasoning: "売上成長率重視。赤字でも可。PSRで過大評価をフィルタ"
 
   - intent: "小型成長株"
     params: { region: japan, preset: small-cap-growth, min_revenue_growth: 0.20, max_psr: 15 }
+    scoring: "売上成長(40)+ROE(20)+PSR(20)+マージン改善(20)=100点"
     reasoning: "テンバガー候補。時価総額1000億円以下"
 
-  # --- 特殊mode系 ---
+  # === クオリティ系 ===
+  - intent: "高品質な銘柄"
+    params: { region: japan, preset: quality, min_roe: 0.15, min_revenue_growth: 0.05 }
+    scoring: "ROE(35)+PER/PBR(35)+配当(20)+安定性(10)=100点"
+    reasoning: "ROEと割安度の配分を最大化。安定した高収益企業"
+
+  - intent: "長期で持てる株"
+    params: { region: japan, preset: long-term, min_roe: 0.10, min_dividend_yield: 0.02 }
+    scoring: "ROE(25)+PER(20)+PBR(15)+配当(25)+成長(15)=100点"
+    reasoning: "配当とROEをバランス良く。5年以上のバイ&ホールド向け"
+
+  - intent: "市場の期待株"
+    params: { region: us, preset: market-darling, min_revenue_growth: 0.15, min_roe: 0.12 }
+    scoring: "成長(35)+ROE(25)+PER逆配点(20)+マージン(20)=100点"
+    reasoning: "高PERでも成長で正当化できる銘柄。PERは高い方がスコアUp（逆配点）"
+
+  # === 特殊mode系 ===
   - intent: "押し目の銘柄"
     mode: pullback
     params: { region: japan, max_per: 20, min_roe: 0.08 }
-    reasoning: "上昇トレンド中の一時調整を検出"
+    reasoning: "上昇トレンド中の一時調整を検出。RSI<40 + BB下限接近 + バウンススコア"
 
   - intent: "急騰銘柄"
     mode: momentum
@@ -52,34 +80,90 @@ examples:
   - intent: "逆張り候補"
     mode: contrarian
     params: { region: japan, max_per: 15, min_roe: 0.03 }
-    reasoning: "テクニカル売られすぎ × ファンダ堅調"
+    reasoning: "テクニカル売られすぎ × ファンダ堅調。RSI<30 + BB下限割れ"
 
   - intent: "いい株ある？"
     mode: alpha
     params: { region: japan }
     reasoning: "4段パイプライン（割安+変化の質+押し目+2軸スコア）"
 
-  # --- テーマ系 ---
+  # === テーマ × プリセット ===
   - intent: "AI関連の割安株"
     params: { region: us, preset: value, theme: ai, max_per: 25 }
-    reasoning: "AIテーマはPER許容度を広げる"
+    reasoning: "AIテーマはPER許容度を広げる。半導体・クラウド含む"
+
+  - intent: "半導体の成長株"
+    params: { region: us, preset: high-growth, theme: ai }
+    reasoning: "半導体はaiテーマに含まれる。成長率重視で検索"
+
+  - intent: "防衛関連で割安なやつ"
+    params: { region: us, preset: value, theme: defense }
+    reasoning: "defenseテーマ。航空宇宙・軍需セクター"
+
+  - intent: "EV関連の成長バリュー"
+    params: { region: japan, preset: growth-value, theme: ev }
+    reasoning: "EVテーマ × 成長+割安のバランス"
+
+  - intent: "バイオ株でクオリティ高いの"
+    params: { region: us, preset: quality, theme: biotech }
+    reasoning: "biotechテーマ × ROE重視のクオリティフィルタ"
 
   - intent: "韓国の半導体株"
     params: { region: kr, preset: value, theme: ai }
-    reasoning: "半導体はaiテーマに含まれる"
+    reasoning: "半導体はaiテーマ。kr地域のPER基準はjapanより低め"
 
-  # --- 地域バリエーション ---
+  # === 地域別閾値 ===
+  - intent: "香港の高配当株"
+    params: { region: hk, preset: high-dividend, min_dividend_yield: 0.04 }
+    reasoning: "香港は配当利回り水準が高い。4%以上を基準に"
+
+  - intent: "台湾のバリュー株"
+    params: { region: tw, preset: value, max_per: 12, max_pbr: 1.2 }
+    reasoning: "台湾はPER水準が低め。日本より厳しい基準"
+
   - intent: "シンガポールの高配当株"
     params: { region: sg, preset: high-dividend, min_dividend_yield: 0.04 }
-    reasoning: "SGXは配当利回り水準が高め"
+    reasoning: "SGXは配当利回り水準が高め。単元100株"
+
+  - intent: "インドネシアの成長株"
+    params: { region: id, preset: growth, min_revenue_growth: 0.15 }
+    reasoning: "新興国は成長率基準を高めに。流動性リスクに注意"
 
   - intent: "ASEAN全体で探して"
     params: { region: asean, preset: alpha }
     reasoning: "aseanは sg/th/my/id/ph の複数地域に自動展開"
 
-# ツール側の責務（エージェントは意識不要）
+  # === 市場環境コンテキスト ===
+  - intent: "今の相場で何を買えばいい？（F&G 25: 恐怖）"
+    params: { region: japan, preset: contrarian }
+    reasoning: "恐怖指数が低い → 逆張り戦略が有効。売られすぎ銘柄を検出"
+
+  - intent: "相場が過熱してる中で安全な株（F&G 80: 貪欲）"
+    params: { region: japan, preset: quality }
+    reasoning: "過熱相場 → クオリティ重視。高ROE・安定銘柄でディフェンシブ"
+
+  - intent: "金利上昇局面で有利な株"
+    params: { region: japan, preset: value, sector: "Financials" }
+    reasoning: "金利上昇 → 金融セクターが恩恵。バリュー戦略と組み合わせ"
+
+  - intent: "円安メリットの株"
+    params: { region: japan, preset: growth, sector: "Technology" }
+    reasoning: "円安 → 輸出・テック企業が恩恵。成長戦略で検索"
+
+  - intent: "リセッション耐性のある株"
+    params: { region: us, preset: quality, sector: "Consumer Defensive" }
+    reasoning: "景気後退懸念 → ディフェンシブセクター × クオリティ"
+
+# スコアリング配分の原則
+scoring_principles:
+  - preset によってスコアの配分が異なる。エージェントは preset に応じた配分を意識する
+  - value系: PER/PBR の配分が高い
+  - growth系: 成長率/ROE の配分が高い。PER制約は緩い
+  - quality系: ROE の配分が最も高い
+  - market-darling: PERは逆配点（高PER=高スコア）
+  - 地域によって閾値が異なる（新興国はPER基準が低い、配当基準が高い等）
+
 tool_responsibilities:
   - 異常値ガード（配当利回り>15%、PBR<0.1 等のサニタイズ）
-  - バリュースコア配分（PER25+PBR25+配当20+ROE15+成長15=100点）
   - 地域ごとの閾値調整（小型株の時価総額基準等）
   - EquityQuery ビルド・API呼び出し

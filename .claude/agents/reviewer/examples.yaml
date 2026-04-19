@@ -3,7 +3,7 @@
 # guardrails の5制約は参考であり、それ以外の問題も自律的に検出する。
 
 examples:
-  # --- スクリーニング結果のレビュー ---
+  # === スクリーニング結果のレビュー ===
   - intent: "スクリーニング結果のレビュー"
     steps:
       - tool: graphrag.get_context
@@ -19,10 +19,11 @@ examples:
           - "同一セクター偏重になっていないか"
           - "ユーザーの投資方針・過去のlessonと合っているか"
           - "既保有銘柄と重複していないか"
+          - "preset のスコアリング配分と結果が整合しているか（growth preset で低成長株がランクインしていないか）"
     conclude: "各レビュアーの結果を統合して PASS/WARN/FAIL 判定"
     reasoning: "スクリーニング → データ品質とロジック整合性を並列チェック"
 
-  # --- 投資判断のレビュー（マルチLLM） ---
+  # === 投資判断のレビュー（マルチLLM） ===
   - intent: "入替提案のレビュー"
     steps:
       - tool: graphrag.get_context
@@ -55,7 +56,66 @@ examples:
     conclude: "各レビュアーの結果を統合して PASS/WARN/FAIL 判定"
     reasoning: "投資判断 → 3観点で並列レビュー。lesson との整合性が最重要"
 
-  # --- 購入判断のレビュー ---
+  # === WARN 具体例 ===
+  - intent: "決算直前の入替提案レビュー → WARN"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "入替レビュー 決算" }
+    reviewers:
+      - role: "リスクレビュアー"
+        result: |
+          WARN: 購入候補の決算が3営業日後に予定。
+          決算サプライズリスクが高い期間。
+          推奨: 決算後まで待機、または打診買い（50%以下）で分割エントリー
+    conclude: "WARN — 決算タイミングリスク。実行は可能だがリスク注記を付与"
+    reasoning: "致命的ではないがリスクあり → WARN 判定。修正指示ではなく注意喚起"
+
+  # === FAIL 具体例 + 修正指示 ===
+  - intent: "売却提案レビュー → FAIL（資金使途欠如）"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "売却レビュー" }
+    reviewers:
+      - role: "リスクレビュアー"
+        result: |
+          FAIL: 売却提案に資金使途が含まれていない。
+          「売って終わり」はPFの現金比率を不必要に高める。
+          修正指示: 以下のいずれかを追加すること
+          1. 代替銘柄への入替提案
+          2. 現金比率の妥当性説明（リセッション備え等）
+          3. 段階的売却スケジュール
+    conclude: "FAIL — Strategist に差し戻し。資金使途を追加してから再提出"
+    reasoning: "guardrails 3番: 売却提案→資金使途必須。修正指示を具体的に"
+
+  # === 観点不一致（複数レビュアー） ===
+  - intent: "レビュアー間で判断が分かれた場合"
+    reviewers:
+      - role: "リスクレビュアー"
+        result: "WARN: 小型株比率が28%に上昇（閾値25%）"
+      - role: "ロジックレビュアー"
+        result: "PASS: lesson違反なし、テーゼ整合"
+      - role: "データレビュアー"
+        result: "PASS: 数値整合性OK"
+    conclude: |
+      統合判断: WARN
+      理由: リスクレビュアーが小型株比率超過を指摘。
+      他2名はPASS → 致命的ではないが注意喚起を付与。
+      最も厳しい判定（FAIL > WARN > PASS）を採用する原則に基づく。
+    reasoning: "レビュアー間で意見が分かれた → 最も厳しい判定を採用"
+
+  # === F&G 過熱警告 ===
+  - intent: "F&G80超でトレンドテーマ銘柄の購入レビュー"
+    reviewers:
+      - role: "リスクレビュアー"
+        result: |
+          WARN: F&G Index = 82（貪欲）でトレンドテーマ銘柄を購入。
+          テーマバブル崩壊リスクあり。
+          過去のパターン: F&G 80超のテーマ順張りは平均で3ヶ月以内に-15%調整
+          推奨: 打診買い（通常の30%以下）で様子見
+    conclude: "WARN — 過熱相場でのトレンド追従。ポジションサイズを制限"
+    reasoning: "F&G80超 + トレンドテーマ → テーマ順張りリスク警告"
+
+  # === 購入判断のレビュー ===
   - intent: "購入判断のレビュー"
     steps:
       - tool: graphrag.get_context
@@ -77,7 +137,7 @@ examples:
     conclude: "各レビュアーの結果を統合して PASS/WARN/FAIL 判定"
     reasoning: "購入 → 過熱チェックと集中リスクが重要"
 
-  # --- PF診断のレビュー ---
+  # === PF診断のレビュー ===
   - intent: "PF診断のレビュー"
     steps:
       - tool: graphrag.get_context
@@ -95,7 +155,7 @@ examples:
     conclude: "各レビュアーの結果を統合して PASS/WARN/FAIL 判定"
     reasoning: "PF診断 → リスク見落としとlesson整合が中心"
 
-  # --- 反論チェック (Devil's Advocate) ---
+  # === 反論チェック (Devil's Advocate) ===
   - intent: "反論チェック"
     reviewers:
       - role: "リスクレビュアー"
@@ -107,7 +167,7 @@ examples:
     conclude: "反論が致命的か判断し PASS/WARN/FAIL 判定"
     reasoning: "Devil's Advocate → リスクレビュアー単独で実行"
 
-  # --- フォールバック（全LLMがClaude） ---
+  # === フォールバック（全LLMがClaude） ===
   - intent: "投資判断レビュー（APIキー未設定）"
     steps:
       - check: "llm.get_available_providers() == []"
@@ -120,7 +180,13 @@ examples:
     conclude: "全て Claude で3観点を順にレビューし統合判断"
     reasoning: "APIキー未設定 → Claude Code 自体で全レビュアーを実行"
 
-# ツール側の責務（エージェントは意識不要）
+# 統合判定の原則
+judgment_principles:
+  - 最も厳しい判定を採用（FAIL > WARN > PASS）
+  - FAIL: 修正指示を具体的に提示し、該当エージェントに差し戻す
+  - WARN: リスク注記を付与して出力。実行はユーザー判断
+  - PASS: そのまま出力
+
 tool_responsibilities:
   - llm: LLM呼び出しのみ（テキスト生成）。判断ロジックなし
   - graphrag: 過去データ取得のみ（lesson・テーゼ・失敗履歴・前回レビュー）
