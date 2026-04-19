@@ -88,6 +88,45 @@ Neo4j 未接続でも全機能が正常動作する（graceful degradation）。
 python3 -m pytest tests/ -q   # 約979テスト (~4秒)
 ```
 
+## v1 からの移行
+
+v1（[stock_skills](https://github.com/okikusan-public/stock_skills)）からの移行が可能です。
+
+### データ互換性
+
+v1 で蓄積した以下のデータはそのまま v2 で利用できます:
+
+| データ | v1 の場所 | v2 の場所 | 互換性 |
+|:---|:---|:---|:---|
+| 投資メモ・lesson | `data/notes/*.json` | `data/notes/*.json` | 完全互換 |
+| スクリーニング履歴 | `data/history/screen/*.json` | `data/history/screen/*.json` | 完全互換 |
+| 売買記録 | `data/history/trade/*.json` | `data/history/trade/*.json` | 完全互換 |
+| レポート履歴 | `data/history/report/*.json` | `data/history/report/*.json` | 完全互換 |
+| リサーチ履歴 | `data/history/research/*.json` | `data/history/research/*.json` | 完全互換 |
+| ヘルスチェック履歴 | `data/history/health/*.json` | `data/history/health/*.json` | 完全互換 |
+| ポートフォリオ | `data/portfolio.csv` | `data/portfolio.csv` | 完全互換 |
+| ウォッチリスト | `data/watchlists/*.json` | `data/watchlists/*.json` | 完全互換 |
+| Neo4j（GraphRAG） | そのまま接続 | そのまま接続 | 完全互換 |
+
+### 移行手順
+
+```bash
+# 1. v2 をクローン
+git clone https://github.com/okikusan-public/stock_skills_2.git
+cd stock_skills_2
+
+# 2. v1 の data/ ディレクトリをコピー
+cp -r /path/to/stock_skills/data/ ./data/
+
+# 3. 依存インストール
+pip install -r requirements.txt
+
+# 4. （任意）GraphRAG と同期
+# v2 で「sync して」と話しかけると data/ → Neo4j の同期が実行される
+```
+
+v1 の `scripts/`、`src/output/`、旧 `SKILL.md` 群は v2 では不要です。`data/` だけをコピーすれば移行完了です。
+
 ## 免責事項
 
 本ソフトウェアは投資判断の参考情報を提供するものであり、**投資成果を保証するものではありません**。本ソフトウェアの出力に基づく投資判断はすべて利用者自身の責任で行ってください。開発者は、本ソフトウェアの利用により生じたいかなる損害についても責任を負いません。
