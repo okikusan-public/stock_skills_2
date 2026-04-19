@@ -16,7 +16,7 @@ from src.core.common import is_etf as _is_etf_base
 from src.core._thresholds import th
 
 try:
-    from src.core.health_check import _detect_value_trap
+    from src.core.value_trap import detect_value_trap as _detect_value_trap
     HAS_VALUE_TRAP = True
 except ImportError:
     HAS_VALUE_TRAP = False

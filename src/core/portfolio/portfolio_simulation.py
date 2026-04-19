@@ -467,7 +467,7 @@ def run_what_if_simulation(
         # 7. Health check on proposed stocks only
         proposed_health: list[dict] = []
         try:
-            from src.core.health_check import run_health_check
+            from src.core.health.runner import run_health_check
 
             health_data = run_health_check(temp_path, client)
             proposed_symbols = {
@@ -519,7 +519,7 @@ def run_what_if_simulation(
                 try:
                     save_portfolio(removal_portfolio, rem_path)
                     try:
-                        from src.core.health_check import run_health_check
+                        from src.core.health.runner import run_health_check
 
                         rem_health_data = run_health_check(rem_path, client)
                         removal_symbols = {

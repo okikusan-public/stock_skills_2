@@ -115,4 +115,3 @@ Plan-Check（KIK-596）では以下の2つの役割を担う:
 ## References
 
 - Few-shot: [examples.yaml](./examples.yaml)
-- Plan-Check: [plan-check.md](../../.claude/rules/plan-check.md)

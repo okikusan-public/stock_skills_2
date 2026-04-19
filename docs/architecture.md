@@ -41,7 +41,6 @@ graph TD
         SC["screening/"]
         PF["portfolio/"]
         RK["risk/"]
-        RS["research/"]
     end
 
     subgraph Data["src/data/"]
