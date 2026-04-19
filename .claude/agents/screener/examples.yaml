@@ -2,123 +2,24 @@
 # 数値はサンプル。エージェントがユーザーの意図・市場状況に応じて自律的に調整する。
 
 # ---------------------------------------------------------------------------
-# Region 定義（地域ごとの取引所・通貨・閾値）
-# yfinance EquityQuery 用。region 指定時にこの定義を参照する。
+# Region 定義（地域ごとの取引所・通貨）
+# yfinance EquityQuery 用。閾値はエージェントが自律判断する。
 # ---------------------------------------------------------------------------
 regions:
-  jp:
-    region_name: "日本"
-    display_name: "日本株"
-    aliases: ["japan", "jp"]
-    small_cap_market_cap: 100000000000  # 1000億円
-    exchanges: [{ code: "JPX", name: "東京証券取引所" }]
-    currency: "JPY"
-    ticker_suffix: ".T"
-    thresholds: { per_max: 15.0, pbr_max: 1.0, dividend_yield_min: 0.025, roe_min: 0.08, rf: 0.005 }
-
-  us:
-    region_name: "米国"
-    display_name: "米国株"
-    aliases: ["us"]
-    small_cap_market_cap: 1000000000  # $1B
-    exchanges: [{ code: "NMS", name: "NASDAQ" }, { code: "NYQ", name: "NYSE" }, { code: "ASE", name: "NYSE American" }, { code: "NGM", name: "NASDAQ GM" }, { code: "NCM", name: "NASDAQ CM" }, { code: "PCX", name: "NYSE Arca" }]
-    currency: "USD"
-    ticker_suffix: ""
-    thresholds: { per_max: 20.0, pbr_max: 3.0, dividend_yield_min: 0.02, roe_min: 0.10, rf: 0.04 }
-
-  sg:
-    region_name: "シンガポール"
-    display_name: "シンガポール株"
-    aliases: ["sg", "singapore"]
-    small_cap_market_cap: 2000000000
-    exchanges: [{ code: "SES", name: "Singapore Exchange" }]
-    currency: "SGD"
-    ticker_suffix: ".SI"
-    thresholds: { per_max: 15.0, pbr_max: 1.5, dividend_yield_min: 0.03, roe_min: 0.08, rf: 0.03 }
-
-  th:
-    region_name: "タイ"
-    display_name: "タイ株"
-    aliases: ["th", "thailand"]
-    small_cap_market_cap: 30000000000
-    exchanges: [{ code: "SET", name: "Stock Exchange of Thailand" }]
-    currency: "THB"
-    ticker_suffix: ".BK"
-    thresholds: { per_max: 15.0, pbr_max: 1.5, dividend_yield_min: 0.03, roe_min: 0.08, rf: 0.025 }
-
-  my:
-    region_name: "マレーシア"
-    display_name: "マレーシア株"
-    aliases: ["my", "malaysia"]
-    small_cap_market_cap: 5000000000
-    exchanges: [{ code: "KLS", name: "Bursa Malaysia" }]
-    currency: "MYR"
-    ticker_suffix: ".KL"
-    thresholds: { per_max: 15.0, pbr_max: 1.5, dividend_yield_min: 0.03, roe_min: 0.08, rf: 0.035 }
-
-  id:
-    region_name: "インドネシア"
-    display_name: "インドネシア株"
-    aliases: ["id", "indonesia"]
-    small_cap_market_cap: 15000000000000
-    exchanges: [{ code: "JKT", name: "Indonesia Stock Exchange" }]
-    currency: "IDR"
-    ticker_suffix: ".JK"
-    thresholds: { per_max: 15.0, pbr_max: 1.5, dividend_yield_min: 0.03, roe_min: 0.08, rf: 0.065 }
-
-  ph:
-    region_name: "フィリピン"
-    display_name: "フィリピン株"
-    aliases: ["ph", "philippines"]
-    small_cap_market_cap: 50000000000
-    exchanges: [{ code: "PHP", name: "PSE Main" }, { code: "PHS", name: "PSE Small" }]
-    currency: "PHP"
-    ticker_suffix: ".PS"
-    thresholds: { per_max: 15.0, pbr_max: 1.5, dividend_yield_min: 0.03, roe_min: 0.08, rf: 0.055 }
-
-  hk:
-    region_name: "香港"
-    display_name: "香港株"
-    aliases: ["hk", "hongkong"]
-    small_cap_market_cap: 10000000000
-    exchanges: [{ code: "HKG", name: "Hong Kong Stock Exchange" }]
-    currency: "HKD"
-    ticker_suffix: ".HK"
-    thresholds: { per_max: 12.0, pbr_max: 1.0, dividend_yield_min: 0.03, roe_min: 0.08, rf: 0.035 }
-
-  kr:
-    region_name: "韓国"
-    display_name: "韓国株"
-    aliases: ["kr", "korea"]
-    small_cap_market_cap: 1000000000000
-    exchanges: [{ code: "KSC", name: "KOSPI" }, { code: "KOE", name: "KOSDAQ" }]
-    currency: "KRW"
-    ticker_suffix: ".KS"
-    thresholds: { per_max: 12.0, pbr_max: 1.0, dividend_yield_min: 0.025, roe_min: 0.08, rf: 0.03 }
-
-  tw:
-    region_name: "台湾"
-    display_name: "台湾株"
-    aliases: ["tw", "taiwan"]
-    small_cap_market_cap: 30000000000
-    exchanges: [{ code: "TAI", name: "TWSE" }, { code: "TWO", name: "TPEx" }]
-    currency: "TWD"
-    ticker_suffix: ".TW"
-    thresholds: { per_max: 15.0, pbr_max: 2.0, dividend_yield_min: 0.03, roe_min: 0.08, rf: 0.01 }
-
-  cn:
-    region_name: "中国"
-    display_name: "中国株"
-    aliases: ["cn", "china"]
-    small_cap_market_cap: 10000000000
-    exchanges: [{ code: "SHH", name: "Shanghai SE" }, { code: "SHZ", name: "Shenzhen SE" }]
-    currency: "CNY"
-    ticker_suffix: ".SS"
-    thresholds: { per_max: 15.0, pbr_max: 1.5, dividend_yield_min: 0.02, roe_min: 0.08, rf: 0.025 }
+  jp:   { aliases: ["japan", "jp"],       exchanges: ["JPX"],       currency: "JPY", suffix: ".T"  }
+  us:   { aliases: ["us"],                exchanges: ["NMS","NYQ","ASE","NGM","NCM","PCX"], currency: "USD", suffix: ""   }
+  sg:   { aliases: ["sg", "singapore"],   exchanges: ["SES"],       currency: "SGD", suffix: ".SI" }
+  th:   { aliases: ["th", "thailand"],    exchanges: ["SET"],       currency: "THB", suffix: ".BK" }
+  my:   { aliases: ["my", "malaysia"],    exchanges: ["KLS"],       currency: "MYR", suffix: ".KL" }
+  id:   { aliases: ["id", "indonesia"],   exchanges: ["JKT"],       currency: "IDR", suffix: ".JK" }
+  ph:   { aliases: ["ph", "philippines"], exchanges: ["PHP","PHS"], currency: "PHP", suffix: ".PS" }
+  hk:   { aliases: ["hk", "hongkong"],    exchanges: ["HKG"],       currency: "HKD", suffix: ".HK" }
+  kr:   { aliases: ["kr", "korea"],       exchanges: ["KSC","KOE"], currency: "KRW", suffix: ".KS" }
+  tw:   { aliases: ["tw", "taiwan"],      exchanges: ["TAI","TWO"], currency: "TWD", suffix: ".TW" }
+  cn:   { aliases: ["cn", "china"],       exchanges: ["SHH","SHZ"], currency: "CNY", suffix: ".SS" }
 
 region_groups:
   asean: ["sg", "th", "my", "id", "ph"]
-  all: ["jp", "us", "sg", "th", "my", "id", "ph"]
 
 # ---------------------------------------------------------------------------
 # Theme 定義（テーマごとの業種マッピング）
@@ -188,129 +89,25 @@ themes:
       - Diagnostics & Research
 
 # ---------------------------------------------------------------------------
-# Preset 定義（プリセットごとのデフォルト閾値・モード）
-# エージェントはこの定義を参考にしつつ、市場環境に応じて自律的に調整する。
+# Preset 定義（戦略の説明とモード。数値は examples の few-shot で伝える）
 # ---------------------------------------------------------------------------
 presets:
-  value:
-    description: "伝統的バリュー投資（低PER・低PBR）"
-    criteria:
-      max_per: 15
-      max_pbr: 1.5
-      min_dividend_yield: 0.02
-      min_roe: 0.05
-
-  high-dividend:
-    description: "高配当株（配当利回り3%以上）"
-    criteria:
-      min_dividend_yield: 0.03
-      max_per: 20
-      min_roe: 0.05
-
-  growth:
-    description: "純成長株（高ROE・高成長、割安制約なし）"
-    mode: "growth"
-    criteria:
-      min_roe: 0.15
-      min_revenue_growth: 0.05
-      min_earnings_growth: 0.10
-      min_market_cap: 100000000000
-
-  growth-value:
-    description: "成長バリュー（成長性＋割安度）"
-    criteria:
-      max_per: 20
-      min_roe: 0.10
-      min_revenue_growth: 0.05
-
-  deep-value:
-    description: "ディープバリュー（非常に低いPER/PBR）"
-    criteria:
-      max_per: 8
-      max_pbr: 0.5
-
-  quality:
-    description: "クオリティバリュー（高ROE＋割安）"
-    criteria:
-      max_per: 15
-      max_pbr: 1.5
-      min_roe: 0.15
-      min_dividend_yield: 0.02
-
-  pullback:
-    description: "押し目買い型（上昇トレンド中の一時調整）"
-    mode: "pullback"
-    criteria:
-      max_per: 20
-      min_roe: 0.08
-      min_revenue_growth: 0.05
-
-  alpha:
-    description: "アルファシグナル（割安＋変化の質＋押し目）"
-    mode: "alpha"
-
-  trending:
-    description: "Xトレンド銘柄（SNSで話題の銘柄をファンダメンタルズ評価）"
-    mode: "trending"
-
-  shareholder-return:
-    description: "高還元銘柄（配当+自社株買い5%以上）"
-    criteria:
-      min_total_shareholder_return: 0.05
-      max_per: 20
-      min_roe: 0.08
-
-  high-growth:
-    description: "高成長株（利益不問・売上急成長・PSRでバブル防止）"
-    criteria:
-      min_revenue_growth: 0.20
-      min_quarterly_revenue_growth: 0.10
-      max_psr: 20.0
-      min_gross_margin: 0.20
-
-  small-cap-growth:
-    description: "小型急成長株（時価総額1000億以下・売上急成長・10倍株候補）"
-    criteria:
-      min_revenue_growth: 0.20
-      min_quarterly_revenue_growth: 0.10
-      max_psr: 15.0
-      min_gross_margin: 0.20
-      max_market_cap: 100000000000
-
-  contrarian:
-    description: "逆張り候補（テクニカル売られすぎ × ファンダ堅調）"
-    mode: "contrarian"
-    criteria:
-      max_per: 15
-      max_pbr: 1.5
-      min_roe: 0.03
-
-  momentum:
-    description: "モメンタム（急騰・ブレイクアウト検出）"
-    mode: "momentum"
-    criteria:
-      min_52wk_change: 0.20
-      min_market_cap: 50000000000
-
-  long-term:
-    description: "長期投資適性（高ROE・EPS成長・高配当・安定企業）"
-    criteria:
-      max_per: 25
-      max_pbr: 3.0
-      min_roe: 0.15
-      min_dividend_yield: 0.02
-      min_earnings_growth: 0.10
-      min_market_cap: 100000000000
-
-  market-darling:
-    description: "市場期待銘柄（高PER許容・EPS急成長・大型）"
-    criteria:
-      min_per: 30
-      min_earnings_growth: 0.30
-      min_revenue_growth: 0.15
-      max_psr: 30.0
-      min_gross_margin: 0.20
-      min_market_cap: 50000000000
+  value:             "伝統的バリュー投資（低PER・低PBR）"
+  high-dividend:     "高配当株（配当利回り重視）"
+  growth:            { description: "純成長株（高ROE・高成長）", mode: "growth" }
+  growth-value:      "成長バリュー（成長性＋割安度）"
+  deep-value:        "ディープバリュー（非常に低いPER/PBR）"
+  quality:           "クオリティバリュー（高ROE＋割安）"
+  pullback:          { description: "押し目買い型（上昇トレンド中の一時調整）", mode: "pullback" }
+  alpha:             { description: "アルファシグナル（割安＋変化の質＋押し目）", mode: "alpha" }
+  trending:          { description: "Xトレンド銘柄（SNS話題＋FA評価）", mode: "trending" }
+  shareholder-return: "高還元銘柄（配当+自社株買い）"
+  high-growth:       "高成長株（売上急成長・PSRでバブル防止）"
+  small-cap-growth:  "小型急成長株（テンバガー候補）"
+  contrarian:        { description: "逆張り候補（テクニカル売られすぎ × ファンダ堅調）", mode: "contrarian" }
+  momentum:          { description: "モメンタム（急騰・ブレイクアウト検出）", mode: "momentum" }
+  long-term:         "長期投資適性（高ROE・配当・安定成長）"
+  market-darling:    "市場期待銘柄（高PER許容・EPS急成長）"
 
 # ---------------------------------------------------------------------------
 # Few-shot Examples
