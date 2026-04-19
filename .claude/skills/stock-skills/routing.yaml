@@ -120,6 +120,18 @@ examples:
     action: direct
     operation: note_delete
 
+  - intent: "データを同期して"
+    action: direct
+    operation: data_sync
+
+  - intent: "GraphRAGと同期"
+    action: direct
+    operation: data_sync
+
+  - intent: "データの整合性チェック"
+    action: direct
+    operation: data_sync
+
 context_rules:
   - 直前の銘柄を省略されたら補完する
   - 直前のスクリーニング結果の「N位の銘柄」は自動解決する
