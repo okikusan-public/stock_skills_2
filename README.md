@@ -1,4 +1,7 @@
-# stock-skills
+# stock-skills v2
+
+> **Version 2** — [stock_skills v1](https://github.com/okikusan-public/stock_skills) を元に、Agentic AI Pattern で全面リニューアル。
+> v1 ではスクリプトにルール・判断ロジックが埋め込まれていたが、v2 ではスクリプトを全廃し、AI が自律的にツール選択・パラメータ決定・実行・レビューする構成に移行した。
 
 投資アシスタントシステム。Agentic AI Pattern で設計。自然言語で話しかけるだけで、銘柄探索・分析・ポートフォリオ管理・リスク評価が自動実行される。
 
@@ -91,4 +94,4 @@ python3 -m pytest tests/ -q   # 約979テスト (~4秒)
 
 ## ライセンス
 
-本ソフトウェアはライセンスフリーです。誰でも自由に利用・改変・再配布できます。
+MIT License。詳細は [LICENSE](LICENSE) を参照。
