@@ -1,6 +1,6 @@
 # stock-skills
 
-割安株スクリーニングシステム。Yahoo Finance API（yfinance）を使って60+地域から割安銘柄をスクリーニングする。[Claude Code](https://claude.ai/code) Skills として動作し、自然言語で話しかけるだけで適切な機能が実行される。
+投資アシスタントシステム。Agentic AI Pattern で設計。自然言語で話しかけるだけで、銘柄探索・分析・ポートフォリオ管理・リスク評価が自動実行される。
 
 ## セットアップ
 
@@ -8,7 +8,7 @@
 pip install -r requirements.txt
 ```
 
-Python 3.10+ が必要。依存: yfinance, pyyaml, numpy, pytest
+Python 3.10+ が必要。依存: yfinance, pyyaml, numpy, pandas, requests, python-dotenv
 
 ### 環境変数
 
@@ -16,174 +16,74 @@ Python 3.10+ が必要。依存: yfinance, pyyaml, numpy, pytest
 # Grok API（Xセンチメント分析、任意）
 export XAI_API_KEY=xai-xxxxxxxxxxxxx
 
-# Neo4j 書き込み深度（off/summary/full、デフォルト: full）
-export NEO4J_MODE=full
+# Gemini API（マルチLLMレビュー、任意）
+export GEMINI_API_KEY=AIzaSy...
 
-# TEI ベクトル検索エンドポイント（デフォルト: http://localhost:8081）
-export TEI_URL=http://localhost:8081
+# OpenAI API（マルチLLMレビュー、任意）
+export OPENAI_API_KEY=sk-proj-...
 
-# コンテキスト鮮度閾値（時間単位、予定: KIK-427）
-export CONTEXT_FRESH_HOURS=24    # これ以内 → キャッシュで回答
-export CONTEXT_RECENT_HOURS=168  # これ以内 → 差分更新 / これ超 → フル再取得
+# Neo4j（GraphRAG、任意）
+export NEO4J_URI=bolt://localhost:7688
+export NEO4J_MODE=full  # off/summary/full
 ```
 
 すべて任意。未設定でもデフォルト値で動作する。
 
-## スキル一覧
+## 使い方
 
-### `/screen-stocks` — 割安株スクリーニング
+自然言語で話しかけるだけ:
 
-EquityQuery で日本株・米国株・ASEAN株等から銘柄を検索。15のプリセットと60+地域に対応。
-
-```bash
-# 基本
-/screen-stocks japan value        # 日本株バリュー
-/screen-stocks us high-dividend   # 米国高配当
-/screen-stocks asean growth-value # ASEAN成長割安
-
-# プリセット一覧 (15戦略)
-# value / high-dividend / growth / growth-value / deep-value / quality / pullback / alpha / trending
-# long-term / shareholder-return / high-growth / small-cap-growth / contrarian / momentum
-
-# テーマ指定
-/screen-stocks us value --theme ai                    # AI関連の割安株
-/screen-stocks japan growth-value --theme ev          # EV関連の成長割安株
-
-# 逆張り・モメンタム
-/screen-stocks japan contrarian    # 売られすぎ銘柄（3軸スコア）
-/screen-stocks us momentum         # 急騰銘柄（モメンタム4軸）
-
-# オプション
-/screen-stocks japan value --sector Technology  # セクター指定
-/screen-stocks japan value --with-pullback      # 押し目フィルタ追加
 ```
-
-### `/stock-report` — 個別銘柄レポート
-
-ティッカーシンボルを指定して財務分析レポートを生成。バリュエーション・割安度判定・**株主還元率**（配当+自社株買い）・バリュートラップ判定を表示。
-
-```bash
-/stock-report 7203.T    # トヨタ
-/stock-report AAPL      # Apple
-```
-
-**出力項目:**
-- セクター・業種
-- バリュエーション（PER/PBR/配当利回り/ROE/利益成長率）
-- 割安度判定（0-100点スコア）
-- **株主還元**（配当利回り + 自社株買い利回り = 総株主還元率）
-
-### `/watchlist` — ウォッチリスト管理
-
-銘柄の追加・削除・一覧表示。
-
-```bash
-/watchlist list
-/watchlist add my-list 7203.T AAPL
-/watchlist show my-list
-```
-
-### `/stress-test` — ストレステスト
-
-ポートフォリオのショック感応度・シナリオ分析・相関分析・VaR・推奨アクション。8つの事前定義シナリオ（トリプル安、テック暴落、円高ドル安等）。
-
-```bash
-/stress-test 7203.T,AAPL,D05.SI
-/stress-test 7203.T,9984.T --scenario トリプル安
-```
-
-### `/market-research` — 深掘りリサーチ
-
-銘柄・業界・マーケット・ビジネスモデルの深掘り分析。Grok API で最新ニュース・Xセンチメント・業界動向を取得。
-
-```bash
-/market-research stock 7203.T    # 銘柄リサーチ
-/market-research industry 半導体  # 業界リサーチ
-/market-research market 日経平均  # マーケット概況
-/market-research business 7751.T # ビジネスモデル分析
-```
-
-### `/stock-portfolio` — ポートフォリオ管理
-
-保有銘柄の売買記録・損益表示・構造分析・ヘルスチェック・推定利回り・リバランス・シミュレーション。多通貨対応（JPY換算）。
-
-```bash
-/stock-portfolio snapshot   # 現在の損益
-/stock-portfolio buy 7203.T 100 2850 JPY
-/stock-portfolio sell AAPL 5
-/stock-portfolio analyze    # HHI集中度分析
-/stock-portfolio health     # ヘルスチェック（3段階アラート + クロス検出 + バリュートラップ検出 + 還元安定度）
-/stock-portfolio forecast   # 推定利回り（楽観/ベース/悲観 + ニュース + Xセンチメント）
-/stock-portfolio rebalance  # リバランス提案
-/stock-portfolio simulate   # 複利シミュレーション（3シナリオ + 配当再投資 + 積立）
-/stock-portfolio what-if    # What-Ifシミュレーション
-/stock-portfolio backtest   # スクリーニング結果のバックテスト
-```
-
-### `/investment-note` — 投資メモ
-
-投資テーゼ・懸念・学びをノートとして記録・参照・削除。
-
-```bash
-/investment-note save --symbol 7203.T --type thesis --content "EV普及で部品需要増"
-/investment-note list
-/investment-note list --symbol AAPL
-```
-
-### `/graph-query` — 知識グラフ検索
-
-過去のレポート・スクリーニング・取引・リサーチ履歴を自然言語で検索。
-
-```bash
-/graph-query "7203.Tの前回レポートは？"
-/graph-query "繰り返し候補に上がってる銘柄は？"
-/graph-query "NVDAのセンチメント推移"
+「いい日本株ある？」      → Screener が自律的にスクリーニング
+「トヨタってどう？」      → Analyst がバリュエーション分析
+「最新ニュース教えて」    → Researcher が Grok API でニュース取得
+「PF大丈夫？」           → Health Checker が数値を出し、Strategist がレコメンド
+「暴落したらどうなる？」   → Health Checker がストレステスト実行
+「メモしておいて」        → 投資メモを直接保存
 ```
 
 ## アーキテクチャ
 
 ```
-Skills (.claude/skills/*/SKILL.md → scripts/*.py)
-  │
-  ▼
-Core (src/core/)
-  screening/ ─ screener, indicators, filters, query_builder, alpha, technicals, momentum, contrarian
-  portfolio/ ─ portfolio_manager, portfolio_simulation, concentration, rebalancer, simulator, backtest
-  risk/      ─ correlation, shock_sensitivity, scenario_analysis, scenario_definitions, recommender
-  research/  ─ researcher (yfinance + Grok API統合)
-  [root]     ─ common, models, ticker_utils, health_check, return_estimate, value_trap
-  │
-  ├─ Markets (src/markets/) ─ japan/us/asean
-  ├─ Data (src/data/)
-  │    yahoo_client.py ─ 24h JSONキャッシュ
-  │    grok_client.py ─ Grok API (Xセンチメント分析)
-  │    graph_store.py ─ Neo4j ナレッジグラフ (dual-write)
-  │    history_store.py ─ 実行履歴の自動蓄積
-  ├─ Output (src/output/) ─ Markdown フォーマッタ
-  └─ Config (config/) ─ プリセット（15戦略）・取引所定義（60地域）
+Orchestrator (.claude/skills/stock-skills/)
+  ├─ SKILL.md          — ルーティング・自律制御
+  ├─ routing.yaml      — エージェント選択 few-shot
+  └─ orchestration.yaml — リトライ・エスカレーション
+
+Agents (.claude/agents/)
+  ├─ screener/      — 銘柄探し（region/preset/theme を自律決定）
+  ├─ analyst/       — バリュエーション・割安度・ETF評価
+  ├─ researcher/    — ニュース・センチメント・業界・市況
+  ├─ health-checker/ — PFの事実・数値（判断しない）
+  ├─ strategist/    — 投資判断・レコメンド（他エージェントの結果を統合）
+  └─ reviewer/      — 品質・リスクチェック（GPT+Gemini+Claude 並列レビュー）
+
+Tools (tools/)
+  ├─ yahoo_finance.py — 株価・ファンダメンタルズ
+  ├─ graphrag.py      — Neo4j ナレッジグラフ
+  ├─ grok.py          — Grok API（X/Web検索）
+  └─ llm.py           — マルチLLM（Gemini/GPT/Grok）
+
+Core (src/core/) — screening, portfolio, risk, research
+Data (src/data/) — yahoo_client, grok_client, graph_store, graph_query
 ```
 
-詳細は [CLAUDE.md](CLAUDE.md) を参照。
+詳細は [docs/architecture.md](docs/architecture.md) を参照。
 
 ## Neo4j ナレッジグラフ（オプション）
 
-スキル実行履歴を Neo4j に蓄積し、過去の分析・取引・リサーチを横断検索できる。
+エージェント実行履歴を Neo4j に蓄積し、過去の分析・取引・リサーチを横断検索できる。
 
 ```bash
-# Docker で Neo4j を起動
 docker compose up -d
-
-# スキーマ初期化 + 既存データインポート
-python3 scripts/init_graph.py --rebuild
 ```
 
-Neo4j 未接続でも全スキルが正常動作する（graceful degradation）。
+Neo4j 未接続でも全機能が正常動作する（graceful degradation）。
 
 ## テスト
 
 ```bash
-pytest tests/           # 全1573テスト (< 6秒)
-pytest tests/core/ -v   # コアモジュール
+python3 -m pytest tests/ -q   # 約2548テスト (~12秒)
 ```
 
 ## 免責事項
