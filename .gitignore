@@ -11,3 +11,4 @@ data/models/
 articles/
 config/
 .DS_Store
+.mcp.json
