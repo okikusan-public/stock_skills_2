@@ -1,0 +1,55 @@
+# Reviewer LLM Routing — 動的LLM選択ルール
+# 各レビュアーに異なるLLMを割り当て、多角的な視点を確保する。
+# APIキー未設定時は全て Claude（Claude Code 自体）で実行する。
+
+reviewers:
+  risk_reviewer:
+    role: "リスク・見落とし・反論"
+    provider: gpt
+    model: gpt-5.4
+  logic_reviewer:
+    role: "矛盾・論理整合性・lesson との整合"
+    provider: gemini
+    model: gemini-3.1-pro-preview
+  data_reviewer:
+    role: "数値の正確性・計算ミス・前提の妥当性"
+    provider: claude
+    model: claude-sonnet-4-6
+  concluder:
+    role: "各レビュアーの結果を統合して最終判断"
+    provider: claude
+    model: claude-sonnet-4-6
+
+# APIキー未設定時のフォールバック
+fallback: claude
+
+# 選択可能な LLM 一覧
+available_models:
+  claude:
+    api_key_env: null  # Claude Code 自体で実行
+    models:
+      - model: claude-opus-4-6
+        cost: { input_per_m: 5.00, output_per_m: 25.00 }
+      - model: claude-sonnet-4-6
+        cost: { input_per_m: 3.00, output_per_m: 15.00 }
+      - model: claude-haiku-4-5
+        cost: { input_per_m: 1.00, output_per_m: 5.00 }
+  gemini:
+    api_key_env: GEMINI_API_KEY
+    models:
+      - model: gemini-3.1-pro-preview
+        cost: { input_per_m: 2.00, output_per_m: 12.00 }
+      - model: gemini-2.5-pro
+        cost: { input_per_m: 1.25, output_per_m: 10.00 }
+  gpt:
+    api_key_env: OPENAI_API_KEY
+    models:
+      - model: gpt-5.4
+        cost: { input_per_m: 2.50, output_per_m: 15.00 }
+  grok:
+    api_key_env: XAI_API_KEY
+    models:
+      - model: grok-4-0709
+        cost: { input_per_m: 3.00, output_per_m: 15.00 }
+      - model: grok-4-1-fast-reasoning
+        cost: { input_per_m: 0.20, output_per_m: 0.50 }
