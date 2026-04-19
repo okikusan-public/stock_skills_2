@@ -27,6 +27,19 @@ retry_rules:
     action: "コンテキストなしで続行（graceful degradation）"
     max_retry: 0  # リトライ不要、そのまま続行
 
+# ---------------------------------------------------------------------------
+# Reviewer 自動挿入 (KIK-659)
+# 投資判断を伴う出力は必ず Reviewer を通す。意識ベースではなく仕組みで強制する。
+# ---------------------------------------------------------------------------
+auto_review:
+  trigger:
+    # 以下のいずれかに該当 → Reviewer を自動挿入
+    - agent_includes: strategist
+    - routing_flag: "review: true"
+    - output_contains: [売却, 購入, 入替, リバランス, 売るべき, 買うべき, 乗り換え, スワップ]
+  action: append_reviewer
+  skip_condition: reviewer_already_executed  # 二重実行を防止
+
 escalation:
   - condition: "再試行上限に達した"
     action: "現時点の結果をそのまま提示し、制限事項を明示する"
