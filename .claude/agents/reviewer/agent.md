@@ -42,11 +42,15 @@ SKILL.md（routing.yaml）経由で渡された他エージェントの出力を
 
 ### 3. 並列レビュー実行
 
+**3つのレビュアー（GPT/Gemini/Claude）は必ず並列で実行する。** 逐次実行は禁止（KIK-672）。
+
+並列実行する方法: 3つの Bash ツール呼び出しを **1つのメッセージで同時に発行** する。
+
 **重要: call_llm() は必ず Bash で Python を実行して呼ぶこと。自分でレスポンスを生成してはならない。**
 
-各レビュアーを `tools/llm.py` の `call_llm()` で起動する。呼び出しは以下のように Bash ツールで Python を実行する:
-
 ```python
+# GPT（リスクレビュー）と Gemini（ロジックレビュー）を並列で呼ぶ
+# Claude（データレビュー）は自分自身なので Bash 不要
 python3 -c "
 import sys; sys.path.insert(0, '.')
 from tools.llm import call_llm
