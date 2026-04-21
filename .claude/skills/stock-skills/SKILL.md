@@ -228,8 +228,8 @@ Neo4j 未接続時は提案しない（graceful degradation）。
 
 ```python
 # Neo4j 接続判定
-from src.data.graph_store import is_connected
-if is_connected():
+from src.data.graph_store._common import is_available
+if is_available():
     # → 「💾 保存しました。sync しますか？」と提案
 ```
 
