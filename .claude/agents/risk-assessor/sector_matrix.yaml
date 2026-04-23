@@ -74,7 +74,7 @@ scale_rules:
 rs_config:
   benchmark: "SPY"
   sector_etfs: ["XLF", "XLE", "XLV", "XLU", "XLK", "XLI", "XLY", "XLP", "XLC", "XLB", "XLRE"]
-  weights: {return_20d: 0.4, return_60d: 0.4, volume_change: 0.2}
+  weights: {rs_ratio_20d: 0.4, rs_ratio_60d: 0.4, volume_change: 0.2}  # rs_ratio = セクターETFリターン / SPYリターン
   strong_threshold: 1.0  # RS > 1.0 = S&P500をアウトパフォーム
 
 # 「やらない」チェック（全規模共通）

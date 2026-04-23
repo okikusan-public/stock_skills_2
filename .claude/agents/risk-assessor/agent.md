@@ -267,13 +267,6 @@ PF照合:
 
 ## 使用ツール
 
-- `tools/yahoo_finance.py` — VIX, 金利, 原油, 金利差
-- `tools/grok.py` — 地政学リスク（search_market）
-- WebSearch — ISM, Fear & Greed, 地政学フォールバック
-- portfolio.csv — 現在のPF比率（直接読み込み）
-
-## 使用ツール
-
 - `tools/yahoo_finance.py` — VIX, 金利, 原油, 金利差, RS計算(中規模以上)
 - `tools/grok.py` — 地政学リスク + セクターローテーション検証(中規模以上)
 - WebSearch — ISM, Fear & Greed, 地政学フォールバック

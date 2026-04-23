@@ -39,7 +39,7 @@ examples:
   # risk-on → トレンドフォロー、risk-off → 割安/逆張り、neutral → 見送り
   - intent: "グロース株を探して"
     agents: [risk-assessor, screener]
-    note: "risk-assessor の判定結果を screener に渡す。risk-on→mode=momentum、risk-off→mode=contrarian、neutral→スクリーニング見送り"
+    note: "risk-assessor の判定結果を screener に渡す。normal→mode=momentum+sector_signal、risk-off→スクリーニング見送り（買わない）"
 
   - intent: "トヨタってどう？"
     agent: analyst
