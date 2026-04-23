@@ -102,8 +102,13 @@ graph TD
 - Neo4j は view（検索・関連付け用）。try/except で graceful degradation
 - Neo4j が落ちても全機能が動作する
 
-### 4. Multi-LLM Review
+### 4. Multi-LLM Review & DeepThink 4-Swarm
 Reviewer エージェントが3つのLLM（GPT/Gemini/Claude）を並列で起動し、異なる視点からレビュー。APIキー未設定時は全て Claude で実行（graceful degradation）。
+
+DeepThink モードでは **2層モデルの 4-Swarm** で評価:
+- **インフラ層（固定）**: Grok=X/リアルタイム市場データ、Gemini=Google検索+長コンテキスト（ハード制約: 他LLMで代替不可）
+- **推論層（動的）**: Devil's Advocate / Scenario Analyst / Lesson Auditor / Portfolio Aligner をテーマに応じて GPT/Gemini/Grok/Claude に割り当て
+- Claude 自身もオーケストレーター層で推論に参加（Agent 起動不要）
 
 ### 5. Self-Healing Orchestration
 orchestration.yaml に基づく自律修正ループ。スクリーニング0件→条件緩和、Reviewer FAIL→差し戻し。ユーザーに聞くのは売買の最終実行のみ。

@@ -66,3 +66,16 @@ scenarios:
       - "lesson が参照されている"
       - "thesis が参照されている（KIK-695）"
     timeout_sec: 300
+
+  - id: e2e_007
+    name: "DeepThink 4-Swarm E2E"
+    input: "イラン停戦したらPFはどうなる？（DeepThink）"
+    expected_agent: "deepthink"
+    eval_criteria:
+      - "deepthink_limits.yaml が正しい値（max_agent_spawns>=20, max_llm_calls>=25）"
+      - "各LLMプロバイダ（GPT/Gemini/Grok）に疎通可能（または graceful degradation）"
+      - "Grok search 関数が利用可能（または graceful degradation）"
+      - "SKILL.md に2層モデル（インフラ層+推論層）の記述がある"
+      - "適性マトリクス・ハード制約の定義がある"
+      - "llm_capabilities.yaml に全プロバイダ定義がある"
+    timeout_sec: 120

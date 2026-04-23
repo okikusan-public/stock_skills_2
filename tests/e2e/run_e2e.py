@@ -283,6 +283,109 @@ def test_hc_strategist_chain() -> dict:
     return {"passed": passed, "details": details}
 
 
+def test_deepthink_swarm() -> dict:
+    """e2e_007: DeepThink 4-Swarm — 2層モデル動的役割割当"""
+    details = []
+    passed = True
+
+    try:
+        # 基準1: deepthink_limits.yaml の読み込みと値チェック
+        import yaml
+        limits_path = PROJECT_ROOT / ".claude" / "skills" / "deepthink" / "deepthink_limits.yaml"
+        with open(limits_path) as f:
+            limits = yaml.safe_load(f)
+
+        max_spawns = limits["limits"]["max_agent_spawns"]
+        max_llm = limits["limits"]["max_llm_calls"]
+        if max_spawns >= 20:
+            details.append(f"[x] max_agent_spawns: {max_spawns} (>= 20)")
+        else:
+            details.append(f"[o] max_agent_spawns: {max_spawns} (< 20, 4-Swarm に不足)")
+            passed = False
+
+        if max_llm >= 25:
+            details.append(f"[x] max_llm_calls: {max_llm} (>= 25)")
+        else:
+            details.append(f"[o] max_llm_calls: {max_llm} (< 25)")
+            passed = False
+
+        # 深度プリセット検証
+        for depth in ["shallow", "medium", "deep"]:
+            preset = limits["depth_presets"][depth]
+            details.append(f"[x] {depth}: spawns={preset['max_agent_spawns']}, llm={preset['max_llm_calls']}")
+
+        # 基準2: LLMプロバイダの利用可否
+        from tools.llm import get_available_providers, is_provider_available
+        providers = get_available_providers()
+        details.append(f"[x] 利用可能プロバイダ: {providers if providers else 'なし（graceful degradation）'}")
+
+        # 基準3: 各LLMへの疎通確認（API key がある場合のみ）
+        from tools.llm import call_llm
+
+        swarm_members = {
+            "gpt": {"model": "gpt-5.4", "prompt": "Reply OK in one word.", "kwargs": {"reasoning": "low"}},
+            "gemini": {"model": "gemini-3-flash-preview", "prompt": "Reply OK in one word.", "kwargs": {}},
+            "grok": {"model": "grok-4.20-0309-reasoning", "prompt": "Reply OK in one word.", "kwargs": {}},
+        }
+
+        llm_ok_count = 0
+        for provider, cfg in swarm_members.items():
+            if is_provider_available(provider):
+                result = call_llm(provider, cfg["model"], cfg["prompt"], timeout=30, **cfg["kwargs"])
+                if result:
+                    details.append(f"[x] {provider}: 応答あり ({len(result)} chars)")
+                    llm_ok_count += 1
+                else:
+                    details.append(f"[o] {provider}: APIキーあるが応答なし")
+                    passed = False
+            else:
+                details.append(f"[x] {provider}: 未設定（graceful degradation）")
+
+        # 基準4: Grok search 関数の利用可否
+        from src.data.grok_client._common import is_available as grok_available
+        if grok_available():
+            from tools.grok import search_x_sentiment
+            sentiment = search_x_sentiment("AAPL", "Apple")
+            if sentiment:
+                details.append(f"[x] Grok search_x_sentiment: データあり")
+            else:
+                details.append(f"[o] Grok search_x_sentiment: データなし")
+        else:
+            details.append(f"[x] Grok search: 未設定（graceful degradation）")
+
+        # 基準5: SKILL.md に2層モデルの記述があるか
+        skill_path = PROJECT_ROOT / ".claude" / "skills" / "deepthink" / "SKILL.md"
+        skill_content = skill_path.read_text()
+        checks = {
+            "インフラ層": "インフラ層" in skill_content,
+            "推論層": "推論層" in skill_content,
+            "適性マトリクス": "適性マトリクス" in skill_content,
+            "ハード制約": "ハード制約" in skill_content,
+            "4-Swarm": "4-Swarm" in skill_content,
+        }
+        for label, found in checks.items():
+            details.append(f"[{'x' if found else 'o'}] SKILL.md {label}: {'あり' if found else 'なし'}")
+            if not found:
+                passed = False
+
+        # 基準6: llm_capabilities.yaml の存在と整合性
+        cap_path = PROJECT_ROOT / "config" / "llm_capabilities.yaml"
+        if cap_path.exists():
+            with open(cap_path) as f:
+                caps = yaml.safe_load(f)
+            has_all = all(p in caps.get("providers", {}) for p in ["gemini", "gpt", "grok"])
+            details.append(f"[{'x' if has_all else 'o'}] llm_capabilities.yaml: 全プロバイダ定義あり")
+        else:
+            details.append("[o] llm_capabilities.yaml: ファイルなし")
+            passed = False
+
+    except Exception as e:
+        details.append(f"[o] 例外: {e}")
+        passed = False
+
+    return {"passed": passed, "details": details}
+
+
 # ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
@@ -294,6 +397,7 @@ SCENARIOS = {
     "e2e_004": ("Researcher E2E", test_researcher),
     "e2e_005": ("Risk Assessor E2E", test_risk_assessor),
     "e2e_006": ("HC + Strategist Chain E2E", test_hc_strategist_chain),
+    "e2e_007": ("DeepThink 4-Swarm E2E", test_deepthink_swarm),
 }
 
 
