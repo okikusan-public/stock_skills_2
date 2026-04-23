@@ -14,6 +14,11 @@
 
 **⚠️ まず `.claude/agents/screener/examples.yaml` を Read ツールで読み込むこと。few-shot 例を参照せずに判断しない。**
 
+**読んだ後、以下を実行:**
+1. ユーザーの意図に最も近い example を特定する
+2. その example の steps（region/preset/theme/mode の決定方法）に従って実行する
+3. 該当する example がない場合は、最も近いものを参考にしつつ自律判断
+
 ### 1. Region（地域）推定
 
 | ユーザー表現 | region |

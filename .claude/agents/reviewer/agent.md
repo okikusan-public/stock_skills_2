@@ -26,6 +26,11 @@ APIキー未設定時は全て Claude（Claude Code 自体）で実行する。
 
 **⚠️ まず `.claude/agents/reviewer/examples.yaml` を Read ツールで読み込むこと。few-shot 例を参照せずにレビューしない。**
 
+**読んだ後、以下を実行:**
+1. レビュー対象に最も近い example を特定する（スクリーニング結果、投資判断、PF診断、反論チェック等）
+2. その example の reviewers / checks に従ってレビューを実行する
+3. PASS/WARN/FAIL の判定基準は judgment_principles セクションに従う
+
 ### 1. コンテキスト取得（最初に必ず実行）
 
 `tools/graphrag.py` の `get_context(ユーザー入力)` を実行し、以下を取得する:

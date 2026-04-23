@@ -44,6 +44,11 @@ for sym in symbols:
 
 **⚠️ まず `.claude/agents/health-checker/examples.yaml` を Read ツールで読み込むこと。few-shot 例を参照せずにデータ取得・計算を行わない。**
 
+**読んだ後、以下を実行:**
+1. ユーザーの意図に最も近い example を特定する（PFヘルスチェック、ストレステスト、市況チェック等）
+2. その example の steps（取得するデータ、計算方法、出力形式）に従って実行する
+3. 該当する example がない場合は、最も近いものを参考にしつつ自律判断
+
 ## 担当機能
 
 ### 1. PFヘルスチェック

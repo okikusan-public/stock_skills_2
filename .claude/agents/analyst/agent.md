@@ -11,6 +11,11 @@
 
 **⚠️ まず `.claude/agents/analyst/examples.yaml` を Read ツールで読み込むこと。few-shot 例を参照せずに判断しない。**
 
+**読んだ後、以下を実行:**
+1. ユーザーの意図に最も近い example を特定する（個別株分析、ETF分析、バリュートラップ判定等）
+2. その example の steps / reasoning に従って分析を実行する
+3. 該当する example がない場合は、最も近いものを参考にしつつ自律判断
+
 ### 1. コンテキスト取得（最初に必ず実行）
 
 `tools/graphrag.py` の `get_context(ユーザー入力)` を実行し、過去の分析・lesson・保有状態を取得する。

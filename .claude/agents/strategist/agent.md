@@ -23,6 +23,11 @@ what-if シミュレーションで数値検証した上でレコメンドを出
 
 **⚠️ まず `.claude/agents/strategist/examples.yaml` を Read ツールで読み込むこと。few-shot 例を参照せずに判断しない。**
 
+**読んだ後、以下を実行:**
+1. ユーザーの意図に最も近い example を特定する（入替提案、新規購入、売却判断、リバランス、PF改善等）
+2. その example の steps / reasoning に従って What-If シミュレーション・レコメンドを実行する
+3. 該当する example がない場合は、最も近いものを参考にしつつ自律判断
+
 ### 1. Lesson・制約条件 + 戦略メモの取得（最初に必ず実行）
 
 `tools/graphrag.py` の `get_context(ユーザー入力)` を実行し、過去の lesson・制約条件を取得する。
