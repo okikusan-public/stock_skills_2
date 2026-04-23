@@ -32,7 +32,29 @@ CSV_COLUMNS = [
     "purchase_date",
     "memo",
     "next_earnings",  # KIK-683: 直近決算日（YYYY-MM-DD）。ETFは空欄
+    "div_yield",      # KIK-694: 配当利回り（%）
+    "buyback_yield",  # KIK-694: 自社株買い利回り（%）
+    "total_return",   # KIK-694: 総還元率（%）= div_yield + buyback_yield
+    "beta",           # KIK-694: ベータ値
+    "role",           # KIK-694: PF内の役割（長期インカム/グロース/ヘッジ等）
 ]
+
+
+def _fmt_float(value) -> str:
+    """Format float for CSV. None → empty string."""
+    if value is None:
+        return ""
+    return str(value)
+
+
+def _safe_float(value: str) -> float | None:
+    """Parse a float from CSV string. Returns None for empty/invalid."""
+    if not value or not str(value).strip():
+        return None
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -66,6 +88,11 @@ def load_portfolio(csv_path: str = DEFAULT_CSV_PATH) -> list[dict]:
                 "purchase_date": row.get("purchase_date", "").strip(),
                 "memo": row.get("memo", "").strip(),
                 "next_earnings": row.get("next_earnings", "").strip(),
+                "div_yield": _safe_float(row.get("div_yield", "")),
+                "buyback_yield": _safe_float(row.get("buyback_yield", "")),
+                "total_return": _safe_float(row.get("total_return", "")),
+                "beta": _safe_float(row.get("beta", "")),
+                "role": row.get("role", "").strip(),
             }
             if position["symbol"] and position["shares"] > 0:
                 portfolio.append(position)
@@ -96,6 +123,11 @@ def save_portfolio(
                     "purchase_date": pos.get("purchase_date", ""),
                     "memo": pos.get("memo", ""),
                     "next_earnings": pos.get("next_earnings", ""),
+                    "div_yield": _fmt_float(pos.get("div_yield")),
+                    "buyback_yield": _fmt_float(pos.get("buyback_yield")),
+                    "total_return": _fmt_float(pos.get("total_return")),
+                    "beta": _fmt_float(pos.get("beta")),
+                    "role": pos.get("role", ""),
                 }
             )
 
@@ -164,6 +196,11 @@ def add_position(
             "purchase_date": purchase_date,
             "memo": memo,
             "next_earnings": "",
+            "div_yield": None,
+            "buyback_yield": None,
+            "total_return": None,
+            "beta": None,
+            "role": "",
         }
         portfolio.append(new_pos)
         result = dict(new_pos)
@@ -284,6 +321,45 @@ def update_next_earnings(
     for pos in portfolio:
         if pos["symbol"].upper() == symbol.upper():
             pos["next_earnings"] = next_earnings
+            found = True
+            break
+    if found:
+        save_portfolio(portfolio, csv_path)
+    return found
+
+
+def update_return_profile(
+    csv_path: str,
+    symbol: str,
+    div_yield: float | None = None,
+    buyback_yield: float | None = None,
+    total_return: float | None = None,
+    beta: float | None = None,
+    role: str | None = None,
+) -> bool:
+    """特定銘柄の還元率・Beta・役割を更新する (KIK-694)。
+
+    None のフィールドは更新しない（既存値を維持）。
+
+    Returns
+    -------
+    bool
+        更新成功なら True、銘柄が見つからなければ False
+    """
+    portfolio = load_portfolio(csv_path)
+    found = False
+    for pos in portfolio:
+        if pos["symbol"].upper() == symbol.upper():
+            if div_yield is not None:
+                pos["div_yield"] = div_yield
+            if buyback_yield is not None:
+                pos["buyback_yield"] = buyback_yield
+            if total_return is not None:
+                pos["total_return"] = total_return
+            if beta is not None:
+                pos["beta"] = beta
+            if role is not None:
+                pos["role"] = role
             found = True
             break
     if found:
