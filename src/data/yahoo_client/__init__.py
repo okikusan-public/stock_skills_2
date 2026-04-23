@@ -61,6 +61,13 @@ from src.data.yahoo_client.macro import (  # noqa: F401
     get_macro_indicators,
 )
 
+# -- Sector relative strength (KIK-702) --
+from src.data.yahoo_client.sector_rs import (  # noqa: F401
+    SECTOR_ETFS,
+    BENCHMARK,
+    get_sector_rs,
+)
+
 __all__ = [
     # Constants
     "CACHE_DIR",
@@ -75,4 +82,7 @@ __all__ = [
     "get_stock_news",
     "get_macro_indicators",
     "clear_memory_cache",
+    # Sector RS (KIK-702)
+    "SECTOR_ETFS",
+    "get_sector_rs",
 ]

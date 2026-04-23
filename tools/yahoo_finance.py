@@ -20,6 +20,8 @@ from src.data.yahoo_client import (  # noqa: E402
     get_stock_news,
     get_macro_indicators,
     screen_stocks,
+    get_sector_rs,
+    SECTOR_ETFS,
 )
 
 __all__ = [
@@ -30,4 +32,6 @@ __all__ = [
     "get_stock_news",
     "get_macro_indicators",
     "screen_stocks",
+    "get_sector_rs",
+    "SECTOR_ETFS",
 ]

@@ -31,15 +31,29 @@ Agent({
 
 ### グロース枠スクリーニング時のリスク判定連動
 
-グロース枠の銘柄探し（「グロース株探して」「防衛株」「ヘルスケア成長株」等）の場合、**Screener の前に Risk Assessor を実行**し、判定結果に応じて Screener の mode を切り替える:
+グロース枠の銘柄探し（「グロース株探して」等）の場合、**Screener の前に Risk Assessor を実行**する。
 
-| Risk Assessor 判定 | Screener mode | 理由 |
+#### Risk Assessor → Screener の連携フロー
+
+1. Risk Assessor が verdict + sector_signal + 「やらないチェック」を出力
+2. オーケストレーターが結果を読み、以下を判断:
+
+| 判定 | Screener mode | sector_signal の扱い |
 |:---|:---|:---|
-| risk-on | momentum / trending | 上昇相場ではトレンドフォロー |
-| neutral | **スクリーニング見送り** | 方向感がない時に動かない |
-| risk-off | contrarian / pullback | 売られすぎの優良株を逆張りで拾う |
+| normal | momentum / trending | sector_signal の favorable セクターを優先フィルタに |
+| risk-off | **買わない** | Screener を起動しない |
 
-Risk Assessor の判定結果（verdict + geopolitical adjustment）を Screener の prompt に含める。
+3. 「やらないチェック」に該当した場合:
+   - 理由を説明し「何もしないのが最善」と提案
+   - ユーザーが「それでもやりたい」→ 実行する（ユーザーの意思を尊重）
+
+#### sector_signal → Screener への注入
+
+Risk Assessor の sector_signal を Screener の prompt に含める:
+- favorable セクターを theme パラメータとして優先使用
+- unfavorable セクターは結果に含めるが ⚠️ 警告タグ付与
+- インカム枠 → 総還元4%超 + Beta0.5以下を追加条件
+- グロース枠 → EPS成長プラス + テーゼ明確を追加条件
 
 ### Screener 起動時の追加コンテキスト（KIK-670）
 

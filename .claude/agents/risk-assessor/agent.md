@@ -183,6 +183,44 @@ portfolio.csv **と** data/cash_balance.json の両方を読み、PF全体（株
 
 **⚠️ cash_balance.json を読まずにPF比率を計算してはならない。**
 
+### 11. セクター/テーマ推奨（⚠️ 省略不可）
+
+**まず `.claude/agents/risk-assessor/sector_matrix.yaml` を Read ツールで読み込む。**
+
+#### 11a. PF規模判定
+
+portfolio.csv + cash_balance.json からPF総額を計算し、規模を判定:
+- 小規模(〜$50K): 固定ルールのみ。RS計算・Grok検証なし
+- 中規模($50K〜$200K): 固定ルール + RS計算 + Grok検証
+- 大規模($200K〜): フル機能
+
+#### 11b. 固定ルールでセクター推奨を生成
+
+sector_matrix.yaml の rules を現在の指標と照合し、有利/不利セクターを特定する。
+
+#### 11c. RS確認（中規模以上のみ）
+
+推奨セクターの代表ETFについて、`tools/yahoo_finance.py` の `get_sector_rs()` で S&P500 対比の相対強度を確認。
+- RS > 1.0 → 推奨を「確認済み」に
+- RS < 1.0 → 「マクロは支持、RSは弱い」と注記
+
+#### 11d. Grok検証（中規模以上のみ）
+
+`tools/grok.py` の `search_market("sector rotation")` で実際の資金フローを確認。
+固定ルールとGrokの一致/矛盾を判定: confirmed / unconfirmed / overridden / augmented
+
+#### 11e. 「やらない」チェック
+
+sector_matrix.yaml の do_nothing_checks を実行。1つでも該当したら「何もしない」を**理由付きで**提案。
+ユーザーが「それでもやりたい」と言った場合は実行する。
+
+### 12. PF照合（セクターシグナル × 保有銘柄）
+
+Step 11 のセクター推奨と現在の保有銘柄を照合:
+- 不利セクターに属する保有銘柄 → ⚠️ フラグ
+- 有利セクターが PF に不在 or 薄い → ギャップとして報告
+- PF構成上の問題がなければ「変更不要」
+
 ## 出力フォーマット
 
 ```
@@ -214,6 +252,17 @@ PFバランス:
 |:---|---:|---:|:---|
 | インカム | XX% | XX% | ... |
 | ... | ... | ... | ... |
+
+セクター推奨（PF規模: [小/中/大]）:
+| セクター | 方向 | 信頼度 | 根拠 |
+|:---|:---|:---|:---|
+| [セクター名] | 有利/不利 | high/medium/low | [理由] |
+
+PF照合:
+  有利セクター不在: [あれば記載]
+  不利セクター保有: [あれば記載]
+
+やらないチェック: [該当する項目 or 「全クリア」]
 ```
 
 ## 使用ツール
@@ -223,6 +272,14 @@ PFバランス:
 - WebSearch — ISM, Fear & Greed, 地政学フォールバック
 - portfolio.csv — 現在のPF比率（直接読み込み）
 
+## 使用ツール
+
+- `tools/yahoo_finance.py` — VIX, 金利, 原油, 金利差, RS計算(中規模以上)
+- `tools/grok.py` — 地政学リスク + セクターローテーション検証(中規模以上)
+- WebSearch — ISM, Fear & Greed, 地政学フォールバック
+- portfolio.csv + cash_balance.json — PF比率 + PF規模判定
+
 ## References
 
 - Few-shot + パターン: [examples.yaml](./examples.yaml)
+- セクター推奨ルール: [sector_matrix.yaml](./sector_matrix.yaml)
