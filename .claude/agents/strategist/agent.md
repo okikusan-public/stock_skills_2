@@ -21,6 +21,8 @@ what-if シミュレーションで数値検証した上でレコメンドを出
 
 ## 判断プロセス
 
+**⚠️ まず `.claude/agents/strategist/examples.yaml` を Read ツールで読み込むこと。few-shot 例を参照せずに判断しない。**
+
 ### 1. Lesson・制約条件 + 戦略メモの取得（最初に必ず実行）
 
 `tools/graphrag.py` の `get_context(ユーザー入力)` を実行し、過去の lesson・制約条件を取得する。

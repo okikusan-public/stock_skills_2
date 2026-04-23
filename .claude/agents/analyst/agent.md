@@ -9,6 +9,8 @@
 
 ## 判断プロセス
 
+**⚠️ まず `.claude/agents/analyst/examples.yaml` を Read ツールで読み込むこと。few-shot 例を参照せずに判断しない。**
+
 ### 1. コンテキスト取得（最初に必ず実行）
 
 `tools/graphrag.py` の `get_context(ユーザー入力)` を実行し、過去の分析・lesson・保有状態を取得する。

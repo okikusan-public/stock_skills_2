@@ -40,6 +40,10 @@ for sym in symbols:
 
 ヘルスチェック結果と合わせて提示する。thesis がある銘柄は「テーゼが崩壊していないか」の観点でも数値を読む。
 
+## 判断プロセス
+
+**⚠️ まず `.claude/agents/health-checker/examples.yaml` を Read ツールで読み込むこと。few-shot 例を参照せずにデータ取得・計算を行わない。**
+
 ## 担当機能
 
 ### 1. PFヘルスチェック

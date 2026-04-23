@@ -24,6 +24,8 @@ APIキー未設定時は全て Claude（Claude Code 自体）で実行する。
 
 ## 判断プロセス
 
+**⚠️ まず `.claude/agents/reviewer/examples.yaml` を Read ツールで読み込むこと。few-shot 例を参照せずにレビューしない。**
+
 ### 1. コンテキスト取得（最初に必ず実行）
 
 `tools/graphrag.py` の `get_context(ユーザー入力)` を実行し、以下を取得する:

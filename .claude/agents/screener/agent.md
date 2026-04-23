@@ -12,6 +12,8 @@
 
 ## 判断プロセス
 
+**⚠️ まず `.claude/agents/screener/examples.yaml` を Read ツールで読み込むこと。few-shot 例を参照せずに判断しない。**
+
 ### 1. Region（地域）推定
 
 | ユーザー表現 | region |
