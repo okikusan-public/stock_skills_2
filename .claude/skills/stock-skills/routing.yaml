@@ -35,6 +35,12 @@ examples:
   - intent: "AI関連の割安株"
     agent: screener
 
+  # --- グロース枠スクリーニング（リスク判定連動） ---
+  # risk-on → トレンドフォロー、risk-off → 割安/逆張り、neutral → 見送り
+  - intent: "グロース株を探して"
+    agents: [risk-assessor, screener]
+    note: "risk-assessor の判定結果を screener に渡す。risk-on→mode=momentum、risk-off→mode=contrarian、neutral→スクリーニング見送り"
+
   - intent: "トヨタってどう？"
     agent: analyst
 

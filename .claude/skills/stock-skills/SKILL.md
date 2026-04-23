@@ -29,6 +29,18 @@ Agent({
 - サブエージェントの prompt に agent.md と examples.yaml の内容を含める
 - サブエージェントは自律的にツール（tools/）を使ってデータ取得・判断・出力する
 
+### グロース枠スクリーニング時のリスク判定連動
+
+グロース枠の銘柄探し（「グロース株探して」「防衛株」「ヘルスケア成長株」等）の場合、**Screener の前に Risk Assessor を実行**し、判定結果に応じて Screener の mode を切り替える:
+
+| Risk Assessor 判定 | Screener mode | 理由 |
+|:---|:---|:---|
+| risk-on | momentum / trending | 上昇相場ではトレンドフォロー |
+| neutral | **スクリーニング見送り** | 方向感がない時に動かない |
+| risk-off | contrarian / pullback | 売られすぎの優良株を逆張りで拾う |
+
+Risk Assessor の判定結果（verdict + geopolitical adjustment）を Screener の prompt に含める。
+
 ### Screener 起動時の追加コンテキスト（KIK-670）
 
 Screener を起動する前に `tools/portfolio_io.py` の `load_portfolio()` で保有銘柄リストを取得し、prompt に含める。
