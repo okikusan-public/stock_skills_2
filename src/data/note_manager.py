@@ -34,6 +34,13 @@ def save_note(
     expected_action: Optional[str] = None,
     stop_loss: Optional[str] = None,
     take_profit: Optional[str] = None,
+    # KIK-715: Thesis management structured fields (all optional)
+    key_kpis: Optional[list] = None,
+    sell_triggers: Optional[list] = None,
+    hold_conditions: Optional[list] = None,
+    thesis_status: Optional[str] = None,  # active / attention / review_needed
+    conviction_override: Optional[bool] = None,
+    override_reason: Optional[str] = None,
 ) -> dict:
     """Save a note to JSON file and Neo4j.
 
@@ -115,6 +122,27 @@ def save_note(
             note["stop_loss"] = stop_loss
         if take_profit:
             note["take_profit"] = take_profit
+
+    # KIK-715: thesis management structured fields
+    _VALID_THESIS_STATUS = {"active", "attention", "review_needed"}
+    if note_type == "thesis":
+        if key_kpis is not None:
+            note["key_kpis"] = key_kpis
+        if sell_triggers is not None:
+            note["sell_triggers"] = sell_triggers
+        if hold_conditions is not None:
+            note["hold_conditions"] = hold_conditions
+        if thesis_status is not None:
+            if thesis_status not in _VALID_THESIS_STATUS:
+                raise ValueError(
+                    f"Invalid thesis_status: {thesis_status}. "
+                    f"Must be one of {_VALID_THESIS_STATUS}"
+                )
+            note["thesis_status"] = thesis_status
+        if conviction_override is not None:
+            note["conviction_override"] = conviction_override
+        if override_reason:
+            note["override_reason"] = override_reason
 
     # KIK-564: Lesson conflict detection (before save)
     lesson_conflicts: list[dict] = []

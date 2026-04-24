@@ -9,8 +9,16 @@ examples:
       - tool: yahoo_finance.get_price_history
         params: { symbols: "全保有銘柄", period: "1y" }
       - code: "各銘柄のRSI, SMA50/200, 損益率を計算"
-      - output: "各銘柄のテクニカル指標・損益率・クロス検出結果を提示。数値のみ"
-    reasoning: "事実のみ提示。良い/悪いの判断はしない"
+      - tool: notes.load_notes
+        params: { symbol: "各銘柄", note_type: "thesis" }
+        note: "thesis存在銘柄は「テーゼ前提 vs 実績」行を出力に含める(KIK-715)"
+      - output: |
+          各銘柄のテクニカル指標・損益率・クロス検出結果を提示。数値のみ。
+          thesis存在銘柄には追加行:
+            テーゼ: [テーゼ要約1行]
+            テーゼ前提 vs 実績: [key_kpiの現在値との比較]
+          thesis未登録銘柄: ⚠テーゼ未登録
+    reasoning: "事実のみ提示。テーゼの有効/無効の判断はしない。前提と実績の数値比較のみ"
 
   # === クロス検出 ===
   - intent: "ゴールデンクロスしてる銘柄ある？"
@@ -109,5 +117,6 @@ examples:
 tool_responsibilities:
   - yahoo_finance: データ取得のみ（価格・財務）
   - graphrag: 過去データ取得のみ
+  - notes: thesis参照のみ（KIK-715。テーゼ前提 vs 実績の数値比較用）
   - テクニカル計算（RSI/SMA/Beta/VaR）はエージェントが code interpreter で実行
   - portfolio.csv はファイル直接読み込み

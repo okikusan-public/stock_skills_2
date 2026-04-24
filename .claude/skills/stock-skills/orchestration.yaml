@@ -62,6 +62,22 @@ parallel_execution:
   # 連鎖: A の出力が B の入力 → 逐次
   # 並列: 独立した観点 → 同時起動
 
+# ---------------------------------------------------------------------------
+# Thesis Check（KIK-715）
+# HC/Strategist完了後、対象銘柄のthesis参照を機械的に検証する。
+# few-shot だけでは LLM が省略する可能性があるため、orchestration で強制する。
+# ---------------------------------------------------------------------------
+thesis_check:
+  run_before: auto_review  # thesis_check → auto_review の順で実行
+  trigger:
+    - agent_includes: health-checker
+    - agent_includes: strategist
+  action: |
+    エージェント完了後、PF銘柄の thesis を load_notes(note_type="thesis") で確認。
+    1. thesis存在銘柄で出力にthesis参照がない → ⚠「thesis未参照」をユーザーに通知
+    2. thesis未登録銘柄がある → ⚠「テーゼ未登録: [銘柄名]」を通知
+  skip_condition: no_portfolio_context  # PF外の単発分析時はスキップ
+
 escalation:
   - condition: "再試行上限に達した"
     action: "現時点の結果をそのまま提示し、制限事項を明示する"
