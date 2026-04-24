@@ -248,6 +248,27 @@ class TestScoreDurability:
         assert result["de_penalty"] is None
         assert result["score"] > 3.0
 
+    def test_low_de_none_no_penalty(self):
+        """D/E=None should skip all penalty logic."""
+        info = _make_info(debt_to_equity=None, operating_margin=0.20, current_ratio=2.0)
+        result = score_durability(info)
+        assert result["de_penalty"] is None
+
+    def test_de_exactly_100_no_penalty(self):
+        """D/E=100.0 should NOT trigger >100% penalty (boundary: > not >=)."""
+        info = _make_info(debt_to_equity=100.0, operating_margin=0.20)
+        detail = _make_detail(interest_expense=-100000000)
+        result = score_durability(info, detail)
+        assert result["de_penalty"] is None
+
+    def test_de_exactly_200_level1_only(self):
+        """D/E=200.0 should trigger >100% but NOT >200% penalty."""
+        info = _make_info(debt_to_equity=200.0, operating_margin=0.20)
+        detail = _make_detail(interest_expense=-100000000)
+        result = score_durability(info, detail)
+        assert result["de_penalty"] == ">100%"
+        assert result["A"] <= 5.0
+
     # KIK-709: Quarterly warning tests
     def test_quarterly_warning_triggered(self):
         """TTM margin 20%+ below annual average → warning."""
