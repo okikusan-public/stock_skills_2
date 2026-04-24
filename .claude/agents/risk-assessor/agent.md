@@ -267,10 +267,7 @@ PF照合:
 
 ## 使用ツール
 
-- `tools/yahoo_finance.py` — VIX, 金利, 原油, 金利差, RS計算(中規模以上)
-- `tools/grok.py` — 地政学リスク + セクターローテーション検証(中規模以上)
-- WebSearch — ISM, Fear & Greed, 地政学フォールバック
-- portfolio.csv + cash_balance.json — PF比率 + PF規模判定
+`config/tools.yaml` を参照。主に `yahoo_finance.get_stock_info` / `grok.search_market` / `portfolio_io.load_portfolio` を使用。ISM/F&G は WebSearch。
 
 ## References
 

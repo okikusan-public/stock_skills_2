@@ -127,9 +127,7 @@ Plan-Check（KIK-596）では以下の2つの役割を担う:
 
 ## 使用ツール
 
-- `tools/yahoo_finance.py` — 現在価格・ファンダメンタルズ（what-if 計算用）
-- `tools/graphrag.py` — 過去の lesson・制約条件・保有状態
-- portfolio.csv — 保有銘柄データ（直接ファイル読み込み）
+`config/tools.yaml` を参照。主に `yahoo_finance.get_stock_info` / `graphrag.get_context` / `notes.load_notes` / `portfolio_io.load_portfolio` を使用。
 
 ## 出力方針
 

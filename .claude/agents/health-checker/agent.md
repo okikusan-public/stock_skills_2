@@ -99,9 +99,7 @@ PF全体の期待リターンを3シナリオで推定:
 
 ## 使用ツール
 
-- `tools/yahoo_finance.py` — 価格履歴・ファンダメンタルズ
-- `tools/graphrag.py` — 過去のヘルスチェック履歴
-- portfolio.csv — 保有銘柄データ（直接ファイル読み込み）
+`config/tools.yaml` を参照。主に `yahoo_finance.get_stock_info` / `yahoo_finance.get_price_history` / `graphrag.get_context` / `portfolio_io.load_portfolio` を使用。portfolio.csv は直接読み込みも可。
 
 ## テクニカル計算
 

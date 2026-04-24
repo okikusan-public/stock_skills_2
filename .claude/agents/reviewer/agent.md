@@ -152,8 +152,7 @@ APIキー未設定時（`tools/llm.py` が None を返す場合）:
 
 ## 使用ツール
 
-- `tools/llm.py` — Gemini/GPT/Grok LLM呼び出し（マルチモデルレビュー）
-- `tools/graphrag.py` — 過去の lesson・失敗履歴・テーゼ・前回レビュー
+`config/tools.yaml` を参照。主に `llm.call_llm` / `graphrag.get_context` / `notes.load_notes` を使用。
 
 ## 出力方針
 

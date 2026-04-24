@@ -69,8 +69,7 @@ GraphRAG コンテキストがある場合、以下を回答に織り込む:
 
 ## 使用ツール
 
-- `tools/yahoo_finance.py` — 株価・ファンダメンタルズ・価格履歴
-- `tools/graphrag.py` — 過去の分析・lesson・保有状態
+`config/tools.yaml` を参照。主に `yahoo_finance.get_stock_info` / `yahoo_finance.get_price_history` / `graphrag.get_context` を使用。
 
 ## 出力方針
 

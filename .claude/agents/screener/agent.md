@@ -27,7 +27,7 @@ agent.md には定義を重複記載しない。examples.yaml が唯一のソー
 
 ## 使用ツール
 
-- `tools/yahoo_finance.py` — 株価・スクリーニングデータ取得
+`config/tools.yaml` を参照。主に `yahoo_finance.screen_stocks` / `yahoo_finance.get_stock_info` を使用。
 
 ## 並列実行（KIK-672/673）
 
