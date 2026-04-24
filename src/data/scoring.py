@@ -58,6 +58,8 @@ def _estimate_buyback_yield(detail: dict | None, info: dict) -> float | None:
     market_cap = safe_float(info.get("market_cap"))
     if repurchase is None or market_cap is None or market_cap <= 0:
         return None
+    if repurchase >= 0:  # positive = issuance (dilutive), not buyback
+        return None
     return abs(repurchase) / market_cap * 100
 
 
@@ -429,7 +431,7 @@ def _compute_total(
 
     # KIK-711: Auto-estimate buyback_yield if not provided in overrides
     growth_overrides = dict(growth_overrides or {})
-    if not growth_overrides.get("buyback_yield"):
+    if growth_overrides.get("buyback_yield") is None:
         bb_yield = _estimate_buyback_yield(detail, info)
         if bb_yield is not None:
             growth_overrides["buyback_yield"] = bb_yield

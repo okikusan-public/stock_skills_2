@@ -383,6 +383,12 @@ class TestEstimateBuybackYield:
         info = {"market_cap": 0}
         assert _estimate_buyback_yield(detail, info) is None
 
+    def test_positive_issuance_returns_none(self):
+        """stock_repurchase positive (issuance) should return None, not false buyback"""
+        detail = {"stock_repurchase": 500_000_000}
+        info = {"market_cap": 50_000_000_000}
+        assert _estimate_buyback_yield(detail, info) is None
+
     def test_large_buyback(self):
         """META-like: $40B buyback on $1.2T market cap ≈ 3.3%"""
         detail = {"stock_repurchase": -40_000_000_000}
@@ -410,3 +416,22 @@ class TestGrowthEAutoEstimate:
         info = _make_info()
         result = score_growth(info, overrides={"buyback_yield": 5.0})
         assert result["E"] == pytest.approx(min(5.0 * 1.5 + 2, 10.0))
+
+    def test_zero_override_not_overwritten(self):
+        """buyback_yield=0.0 from portfolio should NOT be overwritten by auto-estimate"""
+        from src.data.scoring import _compute_total
+        info = _make_info(market_cap=100_000_000_000)
+        detail = _make_detail(stock_repurchase=-5_000_000_000)  # 5% auto-estimate
+        # Explicit 0.0 from portfolio
+        result = _compute_total(info, detail, growth_overrides={"buyback_yield": 0.0})
+        # With is None check, 0.0 should be preserved (not overwritten)
+        assert result["components"]["growth_detail"]["E"] == 2.0  # 0.0*1.5+2
+
+    def test_compute_total_auto_estimates(self):
+        """_compute_total with no overrides should auto-estimate from detail"""
+        from src.data.scoring import _compute_total
+        info = _make_info(market_cap=50_000_000_000)
+        detail = _make_detail(stock_repurchase=-1_500_000_000)  # 3% buyback
+        result = _compute_total(info, detail)
+        e_score = result["components"]["growth_detail"]["E"]
+        assert e_score > 2.0  # auto-estimated, not default 2.0
