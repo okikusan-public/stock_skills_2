@@ -129,12 +129,12 @@ quality_thresholds:
     excellent: 8    # ≥8: 優秀（「高い」「優良」はこの水準）
     good: 6         # ≥6: 良好（「良い」「しっかりした」はこの水準）
     average: 4      # ≥4: 普通
-    poor: 4         # <4: 低い（要注意）
+    # <4 は「低い（要注意）」
   total:
     premium: 7      # ≥7: プレミアム品質
     solid: 6        # ≥6: 堅実
     moderate: 5     # ≥5: 中程度
-    weak: 5         # <5: 弱い
+    # <5 は「弱い」
 
 # ---------------------------------------------------------------------------
 # Few-shot Examples
@@ -332,8 +332,8 @@ quality_examples:
   - intent: "堅い高配当を探して"
     params: { region: japan, preset: high-dividend, min_dividend_yield: 0.035 }
     scoring: "配当(35)+PER(20)+PBR(15)+ROE(15)+成長(15)=100点"
-    quality_filter: { min_durability: 7 }
-    reasoning: "持続性≥7で鉄壁。配当が持続可能か（payout健全性・財務堅牢性）を重視"
+    quality_filter: { min_durability: 7, min_return: 6 }
+    reasoning: "持続性≥7+還元性≥6で鉄壁。配当が持続可能か（payout健全性・財務堅牢性）を重視"
 
   - intent: "還元が厚くて成長もある株"
     params: { region: japan, preset: shareholder-return, min_total_return: 0.04 }
