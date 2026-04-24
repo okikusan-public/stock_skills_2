@@ -46,6 +46,21 @@ def _clamp(value: float, lo: float = 0.0, hi: float = 10.0) -> float:
     return max(lo, min(hi, value))
 
 
+def _estimate_buyback_yield(detail: dict | None, info: dict) -> float | None:
+    """Estimate buyback yield from stock_repurchase / market_cap (KIK-711).
+
+    stock_repurchase is negative (cash outflow) or None.
+    Returns buyback yield as positive percentage, or None if data insufficient.
+    """
+    if not detail:
+        return None
+    repurchase = detail.get("stock_repurchase")
+    market_cap = safe_float(info.get("market_cap"))
+    if repurchase is None or market_cap is None or market_cap <= 0:
+        return None
+    return abs(repurchase) / market_cap * 100
+
+
 def _normalize_de(value) -> float | None:
     """Return D/E as percentage. yfinance always returns percentage form
     (e.g., 7.255 = 7.255%, 105.0 = 105%) per docs/data-models.md.
@@ -411,6 +426,13 @@ def _compute_total(
 ) -> dict:
     """Shared scoring pipeline: durability → return (cap) → growth → total → quadrant."""
     cfg = _load_config()
+
+    # KIK-711: Auto-estimate buyback_yield if not provided in overrides
+    growth_overrides = dict(growth_overrides or {})
+    if not growth_overrides.get("buyback_yield"):
+        bb_yield = _estimate_buyback_yield(detail, info)
+        if bb_yield is not None:
+            growth_overrides["buyback_yield"] = bb_yield
 
     dur_result = score_durability(info, detail)
     ret_result = score_return(info, portfolio_entry=portfolio_entry,
