@@ -45,3 +45,43 @@ class TestSyncAll:
              patch("src.data.portfolio_io.load_portfolio", side_effect=Exception("CSV broken")):
             result = sync_all()
         assert any("portfolio" in s for s in result["failed"])
+
+    def test_notes_sync_calls_merge_note(self, tmp_path):
+        """Notes JSON files are synced via merge_note."""
+        import json
+        from tools.graphrag import sync_all
+
+        notes_dir = tmp_path / "data" / "notes"
+        notes_dir.mkdir(parents=True)
+        note = {"id": "n1", "date": "2026-04-24", "type": "thesis",
+                "content": "Test", "symbol": "MSFT"}
+        (notes_dir / "n1.json").write_text(json.dumps(note))
+
+        import tools.graphrag as tg
+        orig_root = tg._project_root
+        try:
+            tg._project_root = str(tmp_path)
+            with patch("src.data.graph_store._common.is_available", return_value=True), \
+                 patch("src.data.portfolio_io.load_portfolio", return_value=[]), \
+                 patch("src.data.graph_store.note.merge_note") as mock_merge:
+                result = sync_all()
+            mock_merge.assert_called_once()
+            assert any("notes" in s for s in result["synced"])
+        finally:
+            tg._project_root = orig_root
+
+    def test_sync_status_yaml_written(self, tmp_path):
+        """sync_status.yaml is written after sync."""
+        import tools.graphrag as tg
+        orig_root = tg._project_root
+        try:
+            tg._project_root = str(tmp_path)
+            (tmp_path / "data").mkdir(parents=True, exist_ok=True)
+            with patch("src.data.graph_store._common.is_available", return_value=True), \
+                 patch("src.data.portfolio_io.load_portfolio", return_value=[]):
+                from tools.graphrag import sync_all
+                sync_all()
+            status_path = tmp_path / "data" / "sync_status.yaml"
+            assert status_path.exists()
+        finally:
+            tg._project_root = orig_root

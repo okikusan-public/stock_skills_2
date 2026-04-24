@@ -130,6 +130,7 @@ def sync_all() -> dict:
     # 3. Update sync_status.yaml
     try:
         status_path = Path(_project_root) / "data" / "sync_status.yaml"
+        status_path.parent.mkdir(parents=True, exist_ok=True)
         import yaml
         status = {"last_sync": datetime.now().isoformat()}
         with open(status_path, "w", encoding="utf-8") as f:
