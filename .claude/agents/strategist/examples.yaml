@@ -1,0 +1,219 @@
+# Strategist Agent — Few-shot Examples
+# 数値はサンプル。エージェントがユーザーの意図・PF状況に応じて自律的に調整する。
+# Strategist は他エージェントの結果を受け取ってレコメンドを出す。
+# what-if は code interpreter で計算する。
+
+examples:
+  # === 入替提案 (swap) ===
+  - intent: "この銘柄を入れ替えたい"
+    input: "Health Checker/Analyst/Researcher の結果"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "入替提案" }
+      - read: "portfolio.csv"
+      - read: "config/allocation.yaml"
+        note: "ターゲット定義を取得（KIK-685 SSoT）"
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "<売却候補>" }
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "<購入候補>" }
+      - code: "売却代金 - 税金(約20%) = 手取り。購入後のセクター/通貨/地域比率 Before/After/Target を計算。warn/limit超過をgreen/yellow/redで判定"
+      - recommend: "通貨配分・セクター分散・コスト・lessonを考慮してレコメンド。ターゲット逸脱があれば警告"
+    reasoning: "入替 → what-ifにTarget列追加。ターゲットレンジ内に収まるか検証"
+
+  - intent: "7751.Tを売ってD05.SIに乗り換えたい"
+    input: "Health Checker: 7751.T は EARLY WARNING / Analyst: D05.SI の分析結果"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "7751.T D05.SI 入替" }
+      - read: "portfolio.csv"
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "7751.T" }
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "D05.SI" }
+      - code: |
+          売却代金 = 現在値 × 株数
+          税金 = (現在値 - 取得単価) × 株数 × 0.2
+          手取り = 売却代金 - 税金
+          D05.SI購入株数 = floor(手取り / (D05.SI株価 × 為替)) を100株単位に丸め
+          Before/After: セクター比率, 通貨比率(SGD増加), 地域比率
+      - recommend: "3パターン比較: 売却+購入 / 売却のみ / 何もしない"
+    reasoning: "具体的な銘柄ペア。SGX は100株単位。税コストを考慮"
+
+  # === 新規購入判断 (buy) ===
+  - intent: "この株買うべき？"
+    input: "Analyst/Researcher の分析結果"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "購入判断" }
+      - read: "portfolio.csv"
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "<候補銘柄>" }
+      - code: "追加後のセクター/通貨/地域/規模比率 Before/After を計算"
+      - recommend: "分散効果・コスト・lessonを考慮してレコメンド"
+    reasoning: "購入 → PF全体への影響を what-if で検証"
+
+  - intent: "NVDAを追加したらどうなる？"
+    input: "Analyst: NVDA は割安度60点 / Researcher: AI需要堅調"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "NVDA 追加" }
+      - read: "portfolio.csv"
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "NVDA" }
+      - code: |
+          購入コスト = 株価 × 株数
+          Before/After: テクノロジーセクター比率, USD比率, 大型株比率
+          PF加重平均Beta の変化
+      - recommend: "USD比率60%超制約チェック。テクノロジー集中度チェック"
+    reasoning: "具体的な銘柄。通貨・セクター集中リスクを検証"
+
+  # === 「何もしない」数値比較 ===
+  - intent: "入替 vs 何もしない の期待値比較"
+    input: "Health Checker: 売却候補 含み益+15% / Analyst: 購入候補 割安度70点"
+    steps:
+      - code: |
+          パターン A: 何もしない
+            期待リターン = 現在PFの加重平均期待リターン（例: +8%/年）
+            コスト = ¥0
+            リスク = 現状維持
+
+          パターン B: 入替実行
+            売却代金 = ¥XXX,XXX
+            税金 = ¥XXX,XXX（含み益 × 20%）
+            手取り = ¥XXX,XXX
+            購入後の期待リターン = +10%/年（仮）
+            コスト = 税金 + 手数料
+            1年後の期待差額 = (B期待リターン - A期待リターン) × 投資額 - 税コスト
+
+          パターン C: 一部売却（50%）
+            税金が半額。リスクも分散
+      - recommend: "3パターンの期待値を比較し、コスト控除後でBが優位な場合のみ推奨"
+    reasoning: "何もしない選択肢を常に含める。税コスト控除後の実質リターンで比較"
+
+  # === 売却判断 (sell) ===
+  - intent: "この株売るべき？"
+    input: "Health Checker の診断結果"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "売却判断" }
+      - tool: notes.check_exit_rule
+        params: { symbol: "<対象銘柄>", pnl_pct: "<現在の損益率%>" }
+        note: "exit-rule ノートの stop_loss/take_profit 閾値と照合。抵触時はルールに従う"
+      - read: "portfolio.csv"
+      - code: |
+          売却代金 = 現在値 × 株数
+          税金 = max(0, (現在値 - 取得単価) × 株数 × 0.2)
+          手取り = 売却代金 - 税金
+          Before/After: セクター/通貨/地域比率
+      - recommend: "売却/ホールド/一部売却の3パターンを比較"
+    reasoning: "売却 → まず exit-rule を確認。ルール抵触ならルール優先。なければ税コスト含めて3パターン比較"
+
+  - intent: "損切りすべき？"
+    input: "Health Checker: 含み損 -15%, RSI 35"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "損切り判断" }
+      - tool: notes.check_exit_rule
+        params: { symbol: "<対象銘柄>", pnl_pct: -15.0 }
+        note: "stop_loss 閾値に抵触しているか確認。抵触 → ルール通り損切りを推奨"
+      - read: "portfolio.csv"
+      - code: "損切り時の実現損失額を計算。損益通算の可能性を確認"
+      - recommend: "損切り / ナンピン / ホールドの3パターンを期待値で比較"
+    reasoning: "損切り → exit-rule の stop_loss 確認が最優先。感情でなくルールとデータで判断"
+
+  # === Lesson 違反時の自動警告 ===
+  - intent: "RSI75の銘柄を買いたい（Lesson: 高値掴みした→RSI70超で買わない）"
+    input: "Analyst: RSI=75 / GraphRAG: lesson 'RSI70超で買わない'"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "購入判断" }
+      - recommend: |
+          ⚠️ Lesson 違反警告:
+          過去の lesson「高値掴みした → 次回はRSI70超で買わない」に該当。
+          現在のRSI: 75（lesson閾値: 70超）
+
+          推奨: RSI が 60 以下に調整するまで待機。
+          それでも購入する場合: 打診買い（通常の50%以下）で分割エントリー
+    reasoning: "lesson に矛盾するアクション → 自動警告。無視するかはユーザー判断"
+
+  # === 損失通算（タックスロスハーベスティング） ===
+  - intent: "含み損の銘柄、税金対策で使える？"
+    input: "Health Checker: 銘柄A 含み損-¥50,000 / 銘柄B 含み益+¥200,000"
+    steps:
+      - read: "portfolio.csv"
+      - code: |
+          銘柄A 売却 → 実現損失 ¥50,000
+          銘柄B の利確時: 課税対象 = ¥200,000 - ¥50,000 = ¥150,000
+          税金節約額 = ¥50,000 × 20% = ¥10,000
+          ただし: 銘柄A を同日再購入すると損益通算不可（wash sale相当）
+      - recommend: "損失通算のメリットを数値で提示。再購入タイミングに注意"
+    reasoning: "タックスロスハーベスティング。数値でメリットを定量化"
+
+  # === 決算前後の売買判断 ===
+  - intent: "決算前に買うべき？"
+    input: "Analyst: 割安度70点 / Researcher: 決算は来週"
+    steps:
+      - recommend: |
+          決算前の購入リスク:
+          - 決算サプライズで±10-20%の変動可能性
+          - 好決算織り込み済みの場合、好決算でも下落リスク
+
+          推奨パターン:
+          A: 決算後に購入（リスク回避）
+          B: 決算前に半額、決算後に残り半額（分割エントリー）
+          C: 決算前にフル購入（サプライズに賭ける）
+
+          判断材料: アナリスト予想との乖離、過去の決算サプライズ傾向
+    reasoning: "決算イベントリスクを明示。分割エントリーを提案"
+
+  # === リバランス (rebalance) ===
+  - intent: "リスクを抑えたい"
+    input: "Health Checker の診断結果"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "リバランス ディフェンシブ" }
+      - read: "portfolio.csv"
+      - recommend: "ディフェンシブ寄りのリバランス案。高Beta銘柄の削減 → 低Beta銘柄の追加"
+    reasoning: "リスク抑制 → defensive 戦略。Beta の Before/After を提示"
+
+  - intent: "攻めたい"
+    input: "Health Checker の診断結果"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "リバランス アグレッシブ" }
+      - read: "portfolio.csv"
+      - recommend: "アグレッシブなリバランス案。グロース比率を引き上げ"
+    reasoning: "攻め → aggressive 戦略。リスク増加を明示"
+
+  # === PF改善 (adjust) ===
+  - intent: "PFを改善したい"
+    input: "Health Checker の診断結果"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "PF改善" }
+      - read: "portfolio.csv"
+      - recommend: |
+          診断結果から問題点を特定し、優先度付きで改善案を提示:
+          1. 高優先: 集中リスク（HHI > 閾値）→ 分散化提案
+          2. 中優先: 通貨偏り → 他地域銘柄の検討
+          3. 低優先: 小型株比率 → 大型株での安定化
+    reasoning: "改善 → 問題を優先度で整理。一度に全部やらず段階的に"
+
+  - intent: "具体的にどうすればいい？"
+    input: "Health Checker: EXIT判定1銘柄, EARLY WARNING 2銘柄"
+    steps:
+      - tool: graphrag.get_context
+        params: { user_input: "PF調整 具体的" }
+      - read: "portfolio.csv"
+      - recommend: |
+          EXIT銘柄: 売却 → 代替候補3銘柄を提案（異なる地域/通貨）
+          WARNING銘柄: 監視継続 or 一部売却のシミュレーション
+          全体: Before/After のPF構成比較表
+    reasoning: "具体的 → 抽象論でなくアクションプランを提示"
+
+tool_responsibilities:
+  - yahoo_finance: データ取得のみ（現在価格・ファンダメンタルズ）
+  - graphrag: 過去データ取得のみ（lesson・制約・保有状態）
+  - portfolio.csv: 保有銘柄データ（直接読み込み）
+  - what-if 計算（比率変化・コスト・税金）は code interpreter で実行

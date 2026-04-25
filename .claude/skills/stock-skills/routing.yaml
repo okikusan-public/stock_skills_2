@@ -1,0 +1,195 @@
+# Stock Skills Routing — エージェント選択 few-shot
+# 網羅不要。代表パターンがあれば Claude Code が柔軟に判断する。
+
+agents:
+  screener:
+    role: 銘柄探し・スクリーニング実行
+    triggers: [探す, スクリーニング, いい株, おすすめ, 割安, 高配当, テーマ, トレンド, 成長株, 品質, 質の高い, クオリティ, 持続性, 還元, 堅い, 優良]
+  analyst:
+    role: 銘柄分析・バリュエーション評価（個別株・ETF）
+    triggers: [レポート, 分析, 割安度, 還元率, バリュートラップ]
+  health-checker:
+    role: PFの事実・数値を出す（判断・レコメンドはしない）
+    triggers: [PF, ポートフォリオ, 損益, ヘルスチェック, ストレステスト, VIX, 金利, 期待リターン, 構造, 偏り, 市況チェック, おはよう, 朝サマリー, モーニング, TODO, 予定, target]
+  researcher:
+    role: ニュース・Xセンチメント・業界/市場動向・ビジネスモデル調査
+    triggers: [ニュース, リサーチ, 深掘り, 業界, マーケット, 市況, センチメント, ビジネスモデル, 動向]
+  strategist:
+    role: 投資判断・入替提案・ワークフロー設計・売却判断
+    triggers: [入替, リバランス, 改善, 調整, プラン, 戦略, どうすべき, 乗り換え, スワップ, 売却, 損切り, 利確, 手放す, 撤退, 売るべき, 売り時]
+  risk-assessor:
+    role: 市場リスク状態判定（risk-on/neutral/risk-off）+ PFバランス目標提示
+    triggers: [リスク判定, リスクオン, リスクオフ, 押し目, 買われすぎ, 売られすぎ, 市況判定]
+  reviewer:
+    role: 品質・矛盾・リスク・反論チェック（動的LLM選択）
+    triggers: []  # 自動挿入: 投資判断を伴う出力時
+
+examples:
+  # --- 単一エージェント ---
+  - intent: "いい株ある？"
+    agent: screener
+
+  - intent: "米国の高配当株を探して"
+    agent: screener
+
+  - intent: "AI関連の割安株"
+    agent: screener
+
+  # --- グロース枠スクリーニング（リスク判定連動） ---
+  # risk-on → トレンドフォロー、risk-off → 割安/逆張り、neutral → 見送り
+  - intent: "グロース株を探して"
+    agents: [risk-assessor, screener]
+    note: "risk-assessor の判定結果を screener に渡す。normal→mode=momentum+sector_signal、risk-off→スクリーニング見送り（買わない）"
+
+  - intent: "トヨタってどう？"
+    agent: analyst
+
+  - intent: "PF大丈夫？"
+    agent: health-checker
+
+  - intent: "ストレステストして"
+    agent: health-checker
+
+  - intent: "VIXは？"
+    agent: health-checker
+
+  - intent: "TODO見せて"
+    agent: health-checker
+
+  - intent: "予定を確認"
+    agent: health-checker
+
+  - intent: "最新ニュース教えて"
+    agent: researcher
+
+  - intent: "半導体業界を調べて"
+    agent: researcher
+
+  - intent: "入替提案して"
+    agent: strategist
+    review: true
+
+  - intent: "プランモードで"
+    agents: [health-checker, analyst, researcher, strategist]
+    review: true
+
+  # --- 複数エージェント連鎖 ---
+  - intent: "今熱いテーマは？"
+    agents: [researcher, screener]
+
+  - intent: "リスク判定して"
+    agent: risk-assessor
+
+  - intent: "今はリスクオン？"
+    agent: risk-assessor
+
+  - intent: "押し目買いの判定"
+    agent: risk-assessor
+
+  - intent: "市況チェック"
+    agents: [health-checker, researcher]
+
+  - intent: "PFを改善したい"
+    agents: [health-checker, strategist]
+    review: true
+
+  # --- 売却判断（risk-assessor → health-checker → strategist の3連鎖） ---
+  - intent: "この株売るべき？"
+    agents: [risk-assessor, health-checker, strategist]
+    review: true
+    note: "risk-assessorで市場リスク判定→health-checkerで数値事実→strategistでcheck_exit_rule照合+What-If比較"
+
+  - intent: "損切りすべき？"
+    agents: [risk-assessor, health-checker, strategist]
+    review: true
+
+  - intent: "利確すべき？"
+    agents: [risk-assessor, health-checker, strategist]
+    review: true
+
+  - intent: "リスク確認して代わりを探して"
+    agents: [health-checker, screener]
+    review: true
+
+  - intent: "半導体を調べて有望な銘柄を探して"
+    agents: [researcher, screener]
+
+  - intent: "トヨタを調べてメモして"
+    agent: analyst
+
+  # --- 記録系（エージェント不要、オーケストレーターが直接実行） ---
+  - intent: "メモして"
+    action: direct
+    operation: note_save
+
+  - intent: "学びを記録"
+    action: direct
+    operation: note_save
+
+  - intent: "テーゼを記録"
+    action: direct
+    operation: note_save
+
+  - intent: "ウォッチリストに入れて"
+    action: direct
+    operation: watchlist_add
+
+  - intent: "ウォッチリスト見せて"
+    action: direct
+    operation: watchlist_list
+
+  - intent: "ウォッチリストから外して"
+    action: direct
+    operation: watchlist_remove
+
+  - intent: "トヨタ100株買った"
+    action: direct
+    operation: portfolio_buy
+
+  - intent: "AAPL5株売った"
+    action: direct
+    operation: portfolio_sell
+
+  - intent: "メモ一覧"
+    action: direct
+    operation: note_list
+
+  - intent: "メモ削除"
+    action: direct
+    operation: note_delete
+
+  - intent: "現金は○○円"
+    action: direct
+    operation: cash_update
+
+  - intent: "キャッシュ残高"
+    action: direct
+    operation: cash_update
+
+  - intent: "ドルは$○○"
+    action: direct
+    operation: cash_update
+
+  - intent: "syncして"
+    action: direct
+    operation: data_sync
+
+  - intent: "データを同期して"
+    action: direct
+    operation: data_sync
+
+  - intent: "GraphRAGと同期"
+    action: direct
+    operation: data_sync
+
+  - intent: "データの整合性チェック"
+    action: direct
+    operation: data_sync
+
+context_rules:
+  - 直前の銘柄を省略されたら補完する
+  - 直前のスクリーニング結果の「N位の銘柄」は自動解決する
+  - 直前のhealth結果の注意銘柄（RSI異常値・大幅損失等）は自動引き継ぐ
+
+ambiguity:
+  strategy: ask  # 複数エージェントが同スコアなら短く選択肢を提示

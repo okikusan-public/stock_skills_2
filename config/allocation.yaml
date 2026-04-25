@@ -1,0 +1,59 @@
+# PFターゲットアロケーション定義 (KIK-685)
+# 3ラウンド × 6者（PM/エンジニア/投資戦略家/GPT/Gemini/Grok）の議論で確定
+# SSoT: 全エージェント（HC/Strategist/Reviewer/Risk Assessor）がこのファイルを参照する
+
+# --- 役割別ターゲット（4LLMスワム承認済み 2026-04-24） ---
+role_targets:
+  normal:
+    income: [45, 55]      # %
+    growth: [25, 30]
+    hedge: [5, 5]
+    cash: [15, 20]
+  risk_off:
+    income: [50, 55]
+    growth: [10, 20]
+    hedge: [5, 10]
+    cash: [25, 35]
+  trigger_to_risk_off:
+    - "リスク判定スコア -3以下"
+    - "VIX > 25"
+    - "強制ルール発動（VIX>40, F&G<10, WTI>$110）"
+  jepi_classification: "ハイブリッド。保有比率を50:50でインカム+グロースに分割カウント"
+
+# --- 集中度制約（warn + limit の2層） ---
+concentration:
+  single_stock:
+    warn: 10              # % — 注意（yellow）
+    limit: 15             # % — 警告（red）
+  top3_stocks:
+    warn: 30
+    limit: 40
+  sector:
+    warn: 20
+    limit: 30
+
+# --- 通貨制約 ---
+currency:
+  USD:
+    warn: 50
+    limit: 60             # lesson「USD60%超に注意」
+  JPY:
+    floor: 25             # 生活通貨の最低ライン
+
+# --- 地域制約 ---
+geography:
+  min_regions: 3          # 最低3地域保有
+  single_region:
+    warn: 50
+    limit: 60
+
+# --- 乖離判定の3段階 ---
+deviation_levels:
+  green: "warn未満 — 正常"
+  yellow: "warn以上 limit未満 — 注意"
+  red: "limit以上 — 警告"
+
+# --- ポリシー ---
+policy:
+  auto_rebalance: false   # 自動リバランス強制なし
+  alert_only: true        # 警告のみ、最終判断はユーザー

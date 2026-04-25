@@ -1,6 +1,6 @@
 # Neo4j Knowledge Graph Schema
 
-投資ナレッジグラフのスキーマリファレンス。`src/data/graph_store.py` が定義・管理する。
+投資ナレッジグラフのスキーマリファレンス。`src/data/graph_store/` が定義・管理する。
 
 ---
 
@@ -602,14 +602,9 @@ ORDER BY tt.date DESC, tt.rank ASC
 **デフォルト**: 環境変数未設定時は Neo4j 接続可能なら `full`、不可なら `off`。
 
 ```bash
-# fullモードでリサーチ実行
-NEO4J_MODE=full python3 .claude/skills/market-research/scripts/run_research.py stock NVDA
-
-# summaryモードで後方互換動作
-NEO4J_MODE=summary python3 .claude/skills/stock-report/scripts/generate_report.py 7203.T
-
-# Neo4j書き込み無効
-NEO4J_MODE=off python3 .claude/skills/stock-report/scripts/generate_report.py 7203.T
+export NEO4J_MODE=full     # 全ノード・リレーションを書き込み（デフォルト）
+export NEO4J_MODE=summary  # サマリーノードのみ書き込み
+export NEO4J_MODE=off      # Neo4j書き込み無効（graceful degradation）
 ```
 
 ---

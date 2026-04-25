@@ -1,0 +1,437 @@
+"""Tests for 3-axis quality scoring (KIK-708)."""
+
+import pytest
+
+from src.data.scoring import (
+    score_return,
+    score_growth,
+    score_durability,
+    _classify_quadrant,
+    _clamp,
+    _estimate_buyback_yield,
+    _load_config,
+)
+
+
+# ---------------------------------------------------------------------------
+# Helper: build minimal info/detail dicts for testing
+# ---------------------------------------------------------------------------
+
+def _make_info(**kwargs):
+    """Create a minimal stock_info dict with defaults."""
+    defaults = {
+        "symbol": "TEST",
+        "sector": "Technology",
+        "price": 100.0,
+        "per": 20.0,
+        "roe": 0.15,
+        "roa": 0.08,
+        "operating_margin": 0.20,
+        "dividend_yield": 0.03,
+        "payout_ratio": 0.40,
+        "debt_to_equity": 50.0,
+        "current_ratio": 2.0,
+        "beta": 1.0,
+        "earnings_growth": 0.10,
+        "revenue_growth": 0.10,
+        "free_cashflow": 1000000000,
+    }
+    defaults.update(kwargs)
+    return defaults
+
+
+def _make_detail(**kwargs):
+    """Create a minimal stock_detail dict with defaults."""
+    defaults = {
+        "operating_cashflow": 2000000000,
+        "net_income_stmt": 1000000000,
+        "depreciation": -500000000,
+        "interest_expense": -100000000,
+        "operating_income_history": [500000000, 450000000, 400000000],
+        "revenue_history": [5000000000, 4500000000, 4000000000],
+        "total_debt": 2000000000,
+    }
+    defaults.update(kwargs)
+    return defaults
+
+
+# ---------------------------------------------------------------------------
+# _clamp
+# ---------------------------------------------------------------------------
+
+class TestClamp:
+    def test_within_range(self):
+        assert _clamp(5.0) == 5.0
+
+    def test_below_zero(self):
+        assert _clamp(-2.0) == 0.0
+
+    def test_above_ten(self):
+        assert _clamp(12.0) == 10.0
+
+
+# ---------------------------------------------------------------------------
+# Return Score (還元性)
+# ---------------------------------------------------------------------------
+
+class TestScoreReturn:
+    def test_high_yield(self):
+        info = _make_info(dividend_yield=0.04)
+        pf = {"div_yield": 4.0, "buyback_yield": 3.0}
+        result = score_return(info, portfolio_entry=pf)
+        assert result["score"] >= 6.0
+        assert result["A"] == 7.0
+        assert not result["capped"]
+
+    def test_zero_dividend(self):
+        info = _make_info(dividend_yield=0.0)
+        result = score_return(info)
+        assert result["score"] == 0.0
+        assert result["B"] == 0.0
+        assert result["C"] == 0.0
+
+    def test_low_yield_below_threshold(self):
+        info = _make_info(dividend_yield=0.005)
+        result = score_return(info)
+        assert result["score"] < 1.0
+
+    def test_cap_rule_durability_low(self):
+        info = _make_info(dividend_yield=0.05)
+        pf = {"div_yield": 8.0, "buyback_yield": 0.0}
+        result = score_return(info, portfolio_entry=pf, durability_score=2.5)
+        assert result["score"] <= 4.0
+        assert result["capped"]
+
+    def test_cap_rule_durability_moderate(self):
+        info = _make_info(dividend_yield=0.05)
+        pf = {"div_yield": 8.0, "buyback_yield": 0.0}
+        result = score_return(info, portfolio_entry=pf, durability_score=4.5)
+        assert result["score"] <= 6.0
+
+    def test_no_cap_when_durability_high(self):
+        info = _make_info(dividend_yield=0.05)
+        pf = {"div_yield": 8.0, "buyback_yield": 0.0}
+        result = score_return(info, portfolio_entry=pf, durability_score=7.0)
+        assert result["score"] > 6.0
+        assert not result["capped"]
+
+    def test_payout_consistency_healthy(self):
+        info = _make_info(payout_ratio=0.30, dividend_yield=0.03)
+        pf = {"div_yield": 3.0, "buyback_yield": 0.0}
+        result = score_return(info, portfolio_entry=pf)
+        assert result["C"] == 10.0
+
+    def test_payout_consistency_risky(self):
+        info = _make_info(payout_ratio=0.90, dividend_yield=0.03)
+        pf = {"div_yield": 3.0, "buyback_yield": 0.0}
+        result = score_return(info, portfolio_entry=pf)
+        assert result["C"] == 2.0
+
+
+# ---------------------------------------------------------------------------
+# Growth Score (成長性)
+# ---------------------------------------------------------------------------
+
+class TestScoreGrowth:
+    def test_high_growth(self):
+        info = _make_info(earnings_growth=0.30, revenue_growth=0.25, roa=0.30)
+        detail = _make_detail()
+        result = score_growth(info, detail)
+        assert result["score"] >= 5.0
+        assert result["A"] == 10.0
+
+    def test_negative_growth(self):
+        info = _make_info(earnings_growth=-0.20, revenue_growth=-0.10, roa=0.05)
+        result = score_growth(info)
+        assert result["A"] == 0.0
+
+    def test_acquisition_flag(self):
+        info = _make_info(earnings_growth=0.0, revenue_growth=0.50, roa=0.05)
+        result_normal = score_growth(info)
+        result_flagged = score_growth(info, overrides={"acquisition_flag": True})
+        assert result_flagged["A"] < result_normal["A"]
+
+    def test_beta_asymmetry_low(self):
+        info = _make_info(beta=0.5, earnings_growth=0.15, roa=0.10)
+        result = score_growth(info)
+        assert result["multiplier"] >= 0.90
+        assert result["multiplier"] < 1.0
+
+    def test_beta_asymmetry_high(self):
+        info = _make_info(beta=2.0, earnings_growth=0.15, roa=0.10)
+        result = score_growth(info)
+        assert result["multiplier"] <= 0.85
+        assert result["multiplier"] >= 0.75
+
+    def test_beta_none(self):
+        info = _make_info(beta=None, earnings_growth=0.15, roa=0.10)
+        result = score_growth(info)
+        assert result["multiplier"] == 1.0
+
+    def test_nopat_zero_no_crash(self):
+        info = _make_info(roa=0.05)
+        detail = _make_detail(net_income_stmt=0, operating_cashflow=100)
+        result = score_growth(info, detail)
+        assert result["C"] == 5.0
+
+    def test_score_within_range(self):
+        info = _make_info()
+        result = score_growth(info)
+        assert 0.0 <= result["score"] <= 10.0
+
+
+# ---------------------------------------------------------------------------
+# Durability Score (持続性)
+# ---------------------------------------------------------------------------
+
+class TestScoreDurability:
+    def test_strong_company(self):
+        info = _make_info(debt_to_equity=30.0, operating_margin=0.20, current_ratio=2.5)
+        detail = _make_detail(interest_expense=-50000000)
+        result = score_durability(info, detail)
+        assert result["score"] >= 5.0
+
+    def test_high_leverage_penalty_level2(self):
+        info = _make_info(debt_to_equity=250.0, operating_margin=0.40)
+        detail = _make_detail(interest_expense=-100000000)
+        result = score_durability(info, detail)
+        assert result["A"] <= 3.0
+        assert result["de_penalty"] is not None
+
+    def test_hard_cap_de_250(self):
+        info = _make_info(debt_to_equity=304.0, operating_margin=0.46)
+        detail = _make_detail(interest_expense=-100000000)
+        result = score_durability(info, detail)
+        assert result["score"] <= 3.0
+        assert "hard cap" in (result["de_penalty"] or "")
+
+    def test_no_debt_high_score(self):
+        info = _make_info(debt_to_equity=0.0, operating_margin=0.20, current_ratio=3.0)
+        detail = _make_detail(interest_expense=None, total_debt=0)
+        result = score_durability(info, detail)
+        assert result["A"] == 10.0
+
+    def test_interest_expense_none_with_debt(self):
+        info = _make_info(debt_to_equity=80.0)
+        detail = _make_detail(interest_expense=None, total_debt=5000000000)
+        result = score_durability(info, detail)
+        assert result["A"] == 7.0
+
+    def test_stability_calculation(self):
+        info = _make_info(operating_margin=0.20)
+        detail = _make_detail(
+            operating_income_history=[1000, 980, 960],
+            revenue_history=[5000, 5000, 5000],
+        )
+        result = score_durability(info, detail)
+        assert result["B"] > 0
+
+    def test_score_within_range(self):
+        info = _make_info()
+        result = score_durability(info)
+        assert 0.0 <= result["score"] <= 10.0
+
+    # KIK-709: D/E normalization bug fix tests
+    def test_low_de_no_penalty(self):
+        """D/E 7.2% (NVDA-like) should NOT trigger any penalty."""
+        info = _make_info(debt_to_equity=7.2, operating_margin=0.65, current_ratio=3.9)
+        detail = _make_detail(interest_expense=-300000000)
+        result = score_durability(info, detail)
+        assert result["de_penalty"] is None
+        assert result["score"] > 3.0  # not capped at 3 (was the bug)
+
+    def test_low_de_3_5_no_penalty(self):
+        """D/E 3.5% (AUTO.JK-like) should NOT trigger any penalty."""
+        info = _make_info(debt_to_equity=3.5, operating_margin=0.06, current_ratio=2.2,
+                          sector="Consumer Cyclical")
+        detail = _make_detail(interest_expense=-50000000)
+        result = score_durability(info, detail)
+        assert result["de_penalty"] is None
+        assert result["score"] > 3.0
+
+    def test_low_de_none_no_penalty(self):
+        """D/E=None should skip all penalty logic."""
+        info = _make_info(debt_to_equity=None, operating_margin=0.20, current_ratio=2.0)
+        result = score_durability(info)
+        assert result["de_penalty"] is None
+
+    def test_de_exactly_100_no_penalty(self):
+        """D/E=100.0 should NOT trigger >100% penalty (boundary: > not >=)."""
+        info = _make_info(debt_to_equity=100.0, operating_margin=0.20)
+        detail = _make_detail(interest_expense=-100000000)
+        result = score_durability(info, detail)
+        assert result["de_penalty"] is None
+
+    def test_de_exactly_200_level1_only(self):
+        """D/E=200.0 should trigger >100% but NOT >200% penalty."""
+        info = _make_info(debt_to_equity=200.0, operating_margin=0.20)
+        detail = _make_detail(interest_expense=-100000000)
+        result = score_durability(info, detail)
+        assert result["de_penalty"] == ">100%"
+        assert result["A"] <= 5.0
+
+    # KIK-709: Quarterly warning tests
+    def test_quarterly_warning_triggered(self):
+        """TTM margin 20%+ below annual average → warning."""
+        info = _make_info(operating_margin=0.05)  # TTM 5%
+        detail = _make_detail(
+            operating_income_history=[500, 450, 400],
+            revenue_history=[5000, 5000, 5000],  # annual avg ~9%
+        )
+        result = score_durability(info, detail)
+        assert result["quarterly_warning"] is not None
+
+    def test_quarterly_warning_not_triggered(self):
+        """TTM margin close to annual average → no warning."""
+        info = _make_info(operating_margin=0.10)  # TTM 10%
+        detail = _make_detail(
+            operating_income_history=[500, 450, 400],
+            revenue_history=[5000, 5000, 5000],  # annual avg ~9%
+        )
+        result = score_durability(info, detail)
+        assert result["quarterly_warning"] is None
+
+    # KIK-709: Industry divisor test
+    def test_industry_divisor_hardware(self):
+        """Computer Hardware should use divisor=3, not Tech's 6."""
+        info_hw = _make_info(sector="Technology", industry="Computer Hardware",
+                             operating_margin=0.10)
+        info_sw = _make_info(sector="Technology", industry="Software—Infrastructure",
+                             operating_margin=0.10)
+        result_hw = score_durability(info_hw)
+        result_sw = score_durability(info_sw)
+        # HW with divisor=3 should score higher than SW with divisor=6
+        assert result_hw["B"] > result_sw["B"]
+
+
+# ---------------------------------------------------------------------------
+# Quadrant Classification (4象限)
+# ---------------------------------------------------------------------------
+
+class TestQuadrantClassification:
+    @pytest.fixture
+    def cfg(self):
+        return _load_config()
+
+    def test_sell_low_durability(self, cfg):
+        q = _classify_quadrant(5.0, 8.0, 5.0, 2.5, False, cfg)
+        assert q == "売却検討"
+
+    def test_sell_capped(self, cfg):
+        q = _classify_quadrant(5.0, 4.0, 5.0, 4.0, True, cfg)
+        assert q == "売却検討"
+
+    def test_watch_low_total(self, cfg):
+        q = _classify_quadrant(4.0, 5.0, 3.0, 5.0, False, cfg)
+        assert q == "要監視"
+
+    def test_watch_moderate_durability(self, cfg):
+        q = _classify_quadrant(5.5, 5.0, 5.0, 4.5, False, cfg)
+        assert q == "要監視"
+
+    def test_add(self, cfg):
+        q = _classify_quadrant(7.5, 5.0, 6.0, 7.0, False, cfg)
+        assert q == "買い増し"
+
+    def test_add_fails_axis_below_min(self, cfg):
+        q = _classify_quadrant(7.5, 3.5, 6.0, 7.0, False, cfg)
+        assert q == "保有継続"
+
+    def test_hold_default(self, cfg):
+        q = _classify_quadrant(6.0, 5.0, 5.0, 6.0, False, cfg)
+        assert q == "保有継続"
+
+    def test_sell_takes_priority_over_watch(self, cfg):
+        q = _classify_quadrant(6.0, 8.0, 5.0, 2.0, False, cfg)
+        assert q == "売却検討"
+
+    def test_exclusive_coverage(self, cfg):
+        quadrants_seen = set()
+        for total in [2.0, 5.0, 7.5]:
+            for dur in [2.0, 4.5, 6.0, 8.0]:
+                for ret in [2.0, 5.0, 8.0]:
+                    for growth in [2.0, 5.0, 8.0]:
+                        for capped in [True, False]:
+                            q = _classify_quadrant(total, ret, growth, dur, capped, cfg)
+                            assert q in {"売却検討", "要監視", "買い増し", "保有継続"}
+                            quadrants_seen.add(q)
+        assert len(quadrants_seen) == 4
+
+
+# ---------------------------------------------------------------------------
+# Buyback Yield Estimation (KIK-711)
+# ---------------------------------------------------------------------------
+
+class TestEstimateBuybackYield:
+    def test_normal_repurchase(self):
+        """stock_repurchase=-1B, market_cap=100B → 1.0%"""
+        detail = {"stock_repurchase": -1_000_000_000}
+        info = {"market_cap": 100_000_000_000}
+        result = _estimate_buyback_yield(detail, info)
+        assert result == pytest.approx(1.0)
+
+    def test_repurchase_none(self):
+        detail = {"stock_repurchase": None}
+        info = {"market_cap": 100_000_000_000}
+        assert _estimate_buyback_yield(detail, info) is None
+
+    def test_detail_none(self):
+        assert _estimate_buyback_yield(None, {"market_cap": 100}) is None
+
+    def test_market_cap_zero(self):
+        detail = {"stock_repurchase": -1_000_000}
+        info = {"market_cap": 0}
+        assert _estimate_buyback_yield(detail, info) is None
+
+    def test_positive_issuance_returns_none(self):
+        """stock_repurchase positive (issuance) should return None, not false buyback"""
+        detail = {"stock_repurchase": 500_000_000}
+        info = {"market_cap": 50_000_000_000}
+        assert _estimate_buyback_yield(detail, info) is None
+
+    def test_large_buyback(self):
+        """META-like: $40B buyback on $1.2T market cap ≈ 3.3%"""
+        detail = {"stock_repurchase": -40_000_000_000}
+        info = {"market_cap": 1_200_000_000_000}
+        result = _estimate_buyback_yield(detail, info)
+        assert result == pytest.approx(3.33, rel=0.01)
+
+
+class TestGrowthEAutoEstimate:
+    def test_e_improves_with_repurchase(self):
+        """With buyback data, E should be > 2.0"""
+        info = _make_info(market_cap=100_000_000_000)
+        detail = _make_detail(stock_repurchase=-2_000_000_000)
+        result = score_growth(info, detail, overrides={"buyback_yield": 2.0})
+        assert result["E"] > 2.0
+
+    def test_e_default_without_repurchase(self):
+        """No repurchase data → E = 2.0"""
+        info = _make_info()
+        result = score_growth(info)
+        assert result["E"] == 2.0
+
+    def test_override_takes_priority(self):
+        """Explicit override beats auto-estimate"""
+        info = _make_info()
+        result = score_growth(info, overrides={"buyback_yield": 5.0})
+        assert result["E"] == pytest.approx(min(5.0 * 1.5 + 2, 10.0))
+
+    def test_zero_override_not_overwritten(self):
+        """buyback_yield=0.0 from portfolio should NOT be overwritten by auto-estimate"""
+        from src.data.scoring import _compute_total
+        info = _make_info(market_cap=100_000_000_000)
+        detail = _make_detail(stock_repurchase=-5_000_000_000)  # 5% auto-estimate
+        # Explicit 0.0 from portfolio
+        result = _compute_total(info, detail, growth_overrides={"buyback_yield": 0.0})
+        # With is None check, 0.0 should be preserved (not overwritten)
+        assert result["components"]["growth_detail"]["E"] == 2.0  # 0.0*1.5+2
+
+    def test_compute_total_auto_estimates(self):
+        """_compute_total with no overrides should auto-estimate from detail"""
+        from src.data.scoring import _compute_total
+        info = _make_info(market_cap=50_000_000_000)
+        detail = _make_detail(stock_repurchase=-1_500_000_000)  # 3% buyback
+        result = _compute_total(info, detail)
+        e_score = result["components"]["growth_detail"]["E"]
+        assert e_score > 2.0  # auto-estimated, not default 2.0

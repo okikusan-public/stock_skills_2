@@ -1,0 +1,93 @@
+# Stock Skills Orchestration — 自律修正ループ定義
+# エージェント実行後の自動リトライ・エスカレーション・ユーザー確認ルール。
+# 分析・レビュー・修正は全て自律で完結。ユーザーに聞くのは最終判断のみ。
+
+retry_rules:
+  - condition: "スクリーニング結果が0件"
+    action: "条件を緩めて Screener を再起動（preset → alpha, top → 20 等）"
+    max_retry: 2
+
+  - condition: "Analyst の分析に必要なデータが取れなかった"
+    action: "別のツールで代替取得を試みる（yahoo_finance → WebSearch 等）"
+    max_retry: 1
+
+  # Reviewer FAIL のリトライは retry_on_fail セクションで制御（下記参照）
+
+  - condition: "Strategist のレコメンドに矛盾がある"
+    action: "Health Checker で事実を再確認してから Strategist を再起動"
+    max_retry: 1
+
+  - condition: "Grok API エラー（rate_limited / timeout）"
+    action: "WebSearch ツールで代替検索"
+    max_retry: 1
+
+  - condition: "GraphRAG 未接続"
+    action: "コンテキストなしで続行（graceful degradation）"
+    max_retry: 0  # リトライ不要、そのまま続行
+
+# ---------------------------------------------------------------------------
+# Reviewer 自動挿入 (KIK-659)
+# 投資判断を伴う出力は必ず Reviewer を通す。意識ベースではなく仕組みで強制する。
+# ---------------------------------------------------------------------------
+auto_review:
+  trigger:
+    # 以下のいずれかに該当 → Reviewer を自動挿入
+    - agent_includes: strategist
+    - agent_includes: screener    # スクリーニング結果も投資判断の入口
+    - routing_flag: "review: true"
+    - output_contains: [売却, 購入, 入替, リバランス, 売るべき, 買うべき, 乗り換え, スワップ]
+  action: append_reviewer
+  skip_condition: reviewer_already_executed  # 二重実行を防止
+
+# ---------------------------------------------------------------------------
+# Reviewer FAIL 時のリトライ方針 (KIK-671)
+# FAIL は「何を直すか」の判断にユーザーの意図が必要。自律リトライしない。
+# ---------------------------------------------------------------------------
+retry_on_fail:
+  max_retries: 2
+  before_retry: ask_user  # FAIL理由と修正方針をユーザーに提示し承認を得る
+  on_pass_or_warn: auto   # PASS/WARN はユーザー確認不要でそのまま出力
+
+# ---------------------------------------------------------------------------
+# 並列実行ルール (KIK-672/673)
+# サブエージェントに並列を任せても逐次実行される。
+# オーケストレーター自身が複数 Agent を同時発行して強制並列化する。
+# ---------------------------------------------------------------------------
+parallel_execution:
+  # オーケストレーター主導の並列化
+  screener_split: true   # テーマ×地域ごとに独立Screenerを同時発行
+  reviewer_split: true   # 3レビュアーを独立サブエージェントとして同時発行
+
+  # エージェント間の並列化（routing.yaml で判断）
+  # 連鎖: A の出力が B の入力 → 逐次
+  # 並列: 独立した観点 → 同時起動
+
+# ---------------------------------------------------------------------------
+# Thesis Check（KIK-715）
+# HC/Strategist完了後、対象銘柄のthesis参照を機械的に検証する。
+# few-shot だけでは LLM が省略する可能性があるため、orchestration で強制する。
+# ---------------------------------------------------------------------------
+thesis_check:
+  run_before: auto_review  # thesis_check → auto_review の順で実行
+  trigger:
+    - agent_includes: health-checker
+    - agent_includes: strategist
+  action: |
+    エージェント完了後、PF銘柄の thesis を load_notes(note_type="thesis") で確認。
+    1. thesis存在銘柄で出力にthesis参照がない → ⚠「thesis未参照」をユーザーに通知
+    2. thesis未登録銘柄がある → ⚠「テーゼ未登録: [銘柄名]」を通知
+  skip_condition: no_portfolio_context  # PF外の単発分析時はスキップ
+
+escalation:
+  - condition: "再試行上限に達した"
+    action: "現時点の結果をそのまま提示し、制限事項を明示する"
+
+  - condition: "複数エージェントが矛盾した結果を返した"
+    action: "矛盾点を整理してユーザーに判断を委ねる"
+
+human_in_the_loop:
+  # ユーザー確認が必要な操作（それ以外は全て自律実行）
+  - "売買の最終実行（buy/sell の --yes 確認）"
+  - "投資判断の最終承認（Strategist のレコメンド承認）"
+  - "Reviewer FAIL 時のリトライ承認（FAIL理由と修正方針を提示）"
+  - "差し戻し上限到達時の続行判断"

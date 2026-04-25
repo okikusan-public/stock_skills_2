@@ -1,0 +1,82 @@
+# E2E Test Scenarios for stock-skills agents
+# Each scenario tests a full agent workflow end-to-end.
+
+scenarios:
+  - id: e2e_001
+    name: "Screener E2E"
+    input: "いい日本株ある？"
+    expected_agent: screener
+    eval_criteria:
+      - "銘柄リストが1件以上返る"
+      - "各銘柄に symbol, name が含まれる"
+      - "PER, PBR, ROE 等の指標が含まれる"
+      - "region が japan であること"
+    timeout_sec: 120
+
+  - id: e2e_002
+    name: "Analyst E2E"
+    input: "7203.Tってどう？"
+    expected_agent: analyst
+    eval_criteria:
+      - "PER, PBR, ROE, 配当利回り等の基本指標が含まれる"
+      - "バリュエーション判定（割安/適正/割高）が含まれる"
+      - "テクニカル指標（RSI, SMA）が含まれる"
+      - "総合スコアまたは判定が含まれる"
+    timeout_sec: 120
+
+  - id: e2e_003
+    name: "Health Checker E2E"
+    input: "PF大丈夫？"
+    expected_agent: health-checker
+    eval_criteria:
+      - "全保有銘柄の損益率が表示される"
+      - "RSI が計算されている"
+      - "thesis/observation がロードされている（KIK-695）"
+      - "セクター/地域/通貨の構成比率が含まれる"
+    timeout_sec: 180
+
+  - id: e2e_004
+    name: "Researcher E2E"
+    input: "最新ニュース教えて"
+    expected_agent: researcher
+    eval_criteria:
+      - "ニュースまたはセンチメント情報が含まれる"
+      - "Grok API が呼ばれている（またはAPI未設定のfallback）"
+      - "市況に関する情報が含まれる"
+    timeout_sec: 120
+
+  - id: e2e_005
+    name: "Risk Assessor E2E"
+    input: "リスク判定して"
+    expected_agent: risk-assessor
+    eval_criteria:
+      - "risk-on / neutral / risk-off のいずれかの判定が返る"
+      - "F&G, VIX 等の根拠データが含まれる"
+      - "geopolitical adjustment が考慮されている"
+    timeout_sec: 120
+
+  - id: e2e_006
+    name: "HC + Strategist Chain E2E"
+    input: "PF改善したい"
+    expected_agent: "[health-checker, strategist]"
+    eval_criteria:
+      - "Health Checker の数値データが含まれる"
+      - "Strategist のレコメンドが含まれる"
+      - "what-if シミュレーション結果が含まれる"
+      - "lesson が参照されている"
+      - "thesis が参照されている（KIK-695）"
+    timeout_sec: 300
+
+  - id: e2e_007
+    name: "DeepThink 4-Swarm E2E"
+    input: "ポートフォリオを改善したい（DeepThink）"
+    expected_agent: "deepthink"
+    eval_criteria:
+      - "deepthink_limits.yaml が正しい値（max_agent_spawns>=20, max_llm_calls>=25）"
+      - "各LLMプロバイダ（GPT/Gemini/Grok）に疎通可能（または graceful degradation）"
+      - "Grok search 関数が利用可能（または graceful degradation）"
+      - "SKILL.md に2層モデル（インフラ層+推論層）の記述がある"
+      - "適性マトリクス・ハード制約の定義がある"
+      - "SKILL.md にエグゼクティブサマリー・統合結論のフォーマットがある"
+      - "llm_capabilities.yaml に全プロバイダ定義がある"
+    timeout_sec: 120

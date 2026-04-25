@@ -1,0 +1,168 @@
+# Health Checker Agent — Few-shot Examples
+# 数値はサンプル。事実・数値を出すだけ。判断・レコメンドはしない。
+
+examples:
+  # === 朝サマリー (KIK-717) ===
+  - intent: "おはよう"
+    mode: morning-summary
+    steps:
+      - read: "portfolio.csv"
+      - tool: yahoo_finance.get_stock_info
+        params: { symbols: "全保有銘柄 + ^VIX" }
+      - tool: yahoo_finance.get_price_history
+        params: { symbols: "全保有銘柄", period: "1mo" }
+        note: "RSI計算用"
+      - tool: morning_summary.detect_alerts
+        note: "exit-rule/RSI/決算接近/VIXの数値ベース異常検知"
+      - tool: morning_summary.format_morning_summary
+      - tool: notes.load_notes
+        params: { note_type: "target" }
+        note: "未実行の予定ノートを取得（KIK-723）"
+      - output: |
+          異常なし → ☀️ 異常なし（1行）
+          異常あり → ⚠️ N件 + 詳細 + 深掘り導線（最大10行）
+          targetノートあり → 末尾に「📌 未実行の予定N件あり（「TODO見せて」で確認）」
+          targetノート0件 → リマインド行なし
+    reasoning: "数値ベースの異常検知のみ。判断・レコメンドはしない。targetリマインドは件数表示のみ"
+
+  - intent: "朝サマリー"
+    mode: morning-summary
+    note: "「おはよう」と同じ。routing.yamlのtriggers参照"
+
+  # === TODO/予定確認 (KIK-723) ===
+  - intent: "TODO見せて"
+    steps:
+      - tool: notes.load_notes
+        params: { note_type: "target" }
+        note: "targetノートを全件取得"
+      - output: |
+          📋 未実行の予定（N件）:
+            - [symbol]: [content]（[date]）
+            ...
+          0件 → 「📋 未実行の予定はありません」
+    reasoning: "targetノートの内容を一覧表示。判断・レコメンドはしない"
+
+  # === PFヘルスチェック ===
+  - intent: "PF大丈夫？"
+    steps:
+      - read: "portfolio.csv"
+      - tool: yahoo_finance.get_price_history
+        params: { symbols: "全保有銘柄", period: "1y" }
+      - code: "各銘柄のRSI, SMA50/200, 損益率を計算"
+      - tool: notes.load_notes
+        params: { symbol: "各銘柄", note_type: "thesis" }
+        note: "thesis存在銘柄は「テーゼ前提 vs 実績」行を出力に含める(KIK-715)"
+      - output: |
+          各銘柄のテクニカル指標・損益率・クロス検出結果を提示。数値のみ。
+          thesis存在銘柄には追加行:
+            テーゼ: [テーゼ要約1行]
+            テーゼ前提 vs 実績: [key_kpiの現在値との比較]
+          thesis未登録銘柄: ⚠テーゼ未登録
+    reasoning: "事実のみ提示。テーゼの有効/無効の判断はしない。前提と実績の数値比較のみ"
+
+  # === クロス検出 ===
+  - intent: "ゴールデンクロスしてる銘柄ある？"
+    steps:
+      - read: "portfolio.csv"
+      - tool: yahoo_finance.get_price_history
+        params: { symbols: "全保有銘柄", period: "1y" }
+      - code: |
+          SMA50 と SMA200 を計算。
+          直近5日間で SMA50 が SMA200 を下から上に抜けた → ゴールデンクロス
+          直近5日間で SMA50 が SMA200 を上から下に抜けた → デッドクロス
+      - output: "クロスイベント一覧（銘柄・日付・タイプ）を提示。数値のみ"
+    reasoning: "クロス検出の事実のみ。買い/売りシグナルの判断はしない"
+
+  # === ストレステスト ===
+  - intent: "暴落したらどうなる？"
+    steps:
+      - read: "portfolio.csv"
+      - tool: yahoo_finance.get_price_history
+        params: { symbols: "全保有銘柄", period: "1y" }
+      - code: "相関分析 + ショック感応度計算 + VaR算出"
+      - output: |
+          シナリオ別の損失額・VaR を金額で提示:
+          トリプル安: -¥XXX,XXX (-X.X%)
+          テック暴落: -¥XXX,XXX (-X.X%)
+          VaR(95%): -¥XXX,XXX / VaR(99%): -¥XXX,XXX
+          数値のみ
+    reasoning: "損失額を金額と%の両方で提示。ヘッジ提案はしない"
+
+  # === PF構造分析 (KIK-685: ターゲット乖離表示) ===
+  - intent: "セクター偏ってない？"
+    steps:
+      - read: "portfolio.csv"
+      - read: "config/allocation.yaml"
+        note: "ターゲット定義を取得（KIK-685 SSoT）"
+      - code: "各セクター/地域/通貨/規模の比率を計算。allocation.yamlのwarn/limitと比較し3段階(green/yellow/red)判定"
+      - output: |
+          比率の事実を提示。数値のみ。ターゲット列と乖離状態を追加:
+          | 軸 | ターゲット | 現在 | 状態 |
+          | セクター集中 | <30% | Tech 17% | 🟢 |
+          | USD比率 | <60% | 58% | 🟡 warn超過 |
+    reasoning: "比率+ターゲット乖離を出すだけ。偏りの判断はしない"
+
+  # === 複数指標が矛盾するケース ===
+  - intent: "テクニカルとファンダが矛盾してる銘柄は？"
+    steps:
+      - read: "portfolio.csv"
+      - tool: yahoo_finance.get_stock_info
+        params: { symbols: "全保有銘柄" }
+      - tool: yahoo_finance.get_price_history
+        params: { symbols: "全保有銘柄", period: "1y" }
+      - code: |
+          各銘柄で以下の矛盾パターンを検出:
+          RSI>70 + PER<10 → テクニカル過熱 vs ファンダ割安
+          RSI<30 + EPS成長率>15% → テクニカル売られすぎ vs ファンダ好調
+          SMAゴールデンクロス + 利益減少 → テクニカル強気 vs ファンダ弱気
+      - output: "矛盾パターンに該当する銘柄と数値を提示。数値のみ"
+    reasoning: "矛盾の事実を出す。どちらが正しいかの判断はしない"
+
+  # === 市況定量 ===
+  - intent: "VIXは？"
+    steps:
+      - tool: yahoo_finance.get_stock_info
+        params: { symbol: "^VIX" }
+      - tool: yahoo_finance.get_price_history
+        params: { symbol: "^VIX", period: "3mo" }
+      - output: "現在値 + 3ヶ月推移を提示。数値のみ"
+    reasoning: "VIX水準の数値のみ。警戒/安心の判断はしない"
+
+  - intent: "市況チェック"
+    steps:
+      - tool: yahoo_finance.get_stock_info
+        params: { symbols: ["^N225", "^GSPC", "^IXIC", "^VIX", "USDJPY=X", "^TNX"] }
+      - tool: yahoo_finance.get_price_history
+        params: { symbols: ["^N225", "^GSPC", "^VIX"], period: "1mo" }
+      - output: "主要指標の現在値・前日比・1ヶ月推移を提示。数値のみ"
+    reasoning: "定量データのみ。市場の温度感判断はしない"
+
+  # === 市況 + PF相関 ===
+  - intent: "今の市況でPFへの影響は？"
+    steps:
+      - read: "portfolio.csv"
+      - tool: yahoo_finance.get_price_history
+        params: { symbols: "全保有銘柄 + ^N225 + ^GSPC + ^VIX + USDJPY=X", period: "3mo" }
+      - code: |
+          PF全体のBeta（対S&P500）を計算
+          PF加重平均RSI を計算
+          PF vs 市場インデックスの相関係数を計算
+      - output: "PFのBeta, 加重平均RSI, 市場相関を提示。数値のみ"
+    reasoning: "PFと市場の関係性の事実のみ。対策提案はしない"
+
+  # === Forecast ===
+  - intent: "期待リターンは？"
+    steps:
+      - read: "portfolio.csv"
+      - tool: yahoo_finance.get_stock_detail
+        params: { symbols: "全保有銘柄" }
+      - code: "3シナリオ（楽観/基本/悲観）のリターン推定"
+      - output: "PF全体の期待リターン数値を提示。数値のみ"
+    reasoning: "数値のみ。投資判断はしない"
+
+tool_responsibilities:
+  - yahoo_finance: データ取得のみ（価格・財務）
+  - graphrag: 過去データ取得のみ
+  - notes: thesis参照のみ（KIK-715。テーゼ前提 vs 実績の数値比較用）
+  - テクニカル計算（RSI/SMA/Beta/VaR）はエージェントが code interpreter で実行
+  - portfolio.csv はファイル直接読み込み

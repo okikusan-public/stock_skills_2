@@ -4,7 +4,7 @@
 
 ---
 
-## stock_info dict（28 フィールド）
+## stock_info dict（27 フィールド）
 
 `yahoo_client.get_stock_info(symbol)` が返す基本データ。JSON キャッシュ対象。
 
@@ -63,9 +63,9 @@ def _normalize_ratio(value):
 | `per` | 0 < per < 1.0 | → `None` |
 | `roe` | < -1.0 or > 2.0 | → `None` |
 
-### エイリアス対応 (`indicators.py`)
+### エイリアス対応
 
-`calculate_value_score()` 等は yfinance 生キーと正規化済みキーの両方を受け付ける:
+yfinance 生キーと正規化済みキーの対応表:
 
 | 正規化キー | yfinance 生キー |
 |:---|:---|
@@ -153,9 +153,32 @@ ETF の場合のみ有意な値を持つ。個別株では `None` が多い。
 
 ---
 
+## portfolio.csv（12 カラム）
+
+`src/data/portfolio_io.py` が読み書きする保有銘柄データ。
+
+| カラム | 型 | 説明 |
+|:---|:---|:---|
+| `symbol` | str | ティッカーシンボル（7203.T, AMZN 等） |
+| `shares` | int | 保有株数 |
+| `cost_price` | float | 平均取得単価 |
+| `cost_currency` | str | 取得通貨（JPY, USD, SGD, IDR） |
+| `purchase_date` | str | 取得日（YYYY-MM-DD） |
+| `memo` | str | メモ |
+| `next_earnings` | str | 直近決算日（YYYY-MM-DD）。ETF は空欄 (KIK-683) |
+| `div_yield` | float? | 配当利回り（%）。None = 未設定 (KIK-694) |
+| `buyback_yield` | float? | 自社株買い利回り（%）(KIK-694) |
+| `total_return` | float? | 総還元率（%）= div_yield + buyback_yield (KIK-694) |
+| `beta` | float? | ベータ値 (KIK-694) |
+| `role` | str | PF内の役割（長期インカム/グロース/ヘッジ等）(KIK-694) |
+
+**更新頻度**: div_yield は四半期決算後、buyback_yield は年次 or 発表時、beta は月次、role は変更時のみ。
+
+---
+
 ## 共通ユーティリティ
 
-### `finite_or_none(v)` (`src/core/common.py`)
+### `finite_or_none(v)` (`src/data/common.py`)
 
 Core モジュールで広く使われるヘルパー。NaN/Inf を `None` に変換し、安全に数値を取得する。
 

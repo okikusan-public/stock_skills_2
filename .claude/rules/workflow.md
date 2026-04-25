@@ -24,9 +24,9 @@ git worktree add -b feature/kik-{NNN}-{short-desc} ~/stock-skills-kik{NNN} main
 結合試験でポートフォリオ系コマンドを使う場合、gitignore対象のデータをコピーする:
 
 ```bash
-mkdir -p ~/stock-skills-kik{NNN}/.claude/skills/stock-portfolio/data
-cp ~/stock-skills/.claude/skills/stock-portfolio/data/portfolio.csv \
-   ~/stock-skills-kik{NNN}/.claude/skills/stock-portfolio/data/
+mkdir -p ~/stock-skills-kik{NNN}/data
+cp ~/stock-skills/data/portfolio.csv \
+   ~/stock-skills-kik{NNN}/data/
 ```
 
 ## 2. 設計フェーズ
@@ -91,10 +91,10 @@ cp ~/stock-skills/.claude/skills/stock-portfolio/data/portfolio.csv \
 
 | テスター名 | 担当 | 検証内容 |
 |-----------|------|---------|
-| screener-tester | スクリーニング | `run_screen.py` を複数プリセット・リージョンで実行 |
-| report-tester | レポート+ウォッチリスト | `generate_report.py` + `manage_watchlist.py` の CRUD |
-| portfolio-tester | ポートフォリオ | `run_portfolio.py` の全サブコマンド（list/snapshot/analyze/health/forecast） |
-| stress-tester | ストレステスト | `run_stress_test.py` を複数シナリオで実行 |
+| screener-tester | スクリーニング | Screener エージェントを複数パターンで実行 |
+| analyst-tester | 分析 | Analyst エージェントで銘柄分析・ETF評価 |
+| portfolio-tester | ポートフォリオ | Health Checker + Strategist で PF 診断・レコメンド |
+| researcher-tester | リサーチ | Researcher エージェントでニュース・センチメント取得 |
 
 ### 実施手順
 
@@ -104,57 +104,42 @@ cp ~/stock-skills/.claude/skills/stock-portfolio/data/portfolio.csv \
 4. 全テスター PASS を確認
 5. チームをシャットダウン・削除
 
-### 結合試験のスクリプト実行パス
+### 結合試験の実行方法
 
-Worktree上で実行するため、パスを明示する:
+Worktree 上でエージェントを自然言語で呼び出して動作確認する:
 
-```bash
-cd ~/stock-skills-kik{NNN}
-python3 .claude/skills/screen-stocks/scripts/run_screen.py --region japan --preset value --top 5
-python3 .claude/skills/stock-report/scripts/generate_report.py 7203.T
-python3 .claude/skills/watchlist/scripts/manage_watchlist.py list
-python3 .claude/skills/stock-portfolio/scripts/run_portfolio.py snapshot
-python3 .claude/skills/stress-test/scripts/run_stress_test.py --portfolio 7203.T,AAPL
+```
+「日本株のバリュー銘柄を探して」     → Screener エージェント
+「7203.Tを分析して」               → Analyst エージェント
+「最新ニュース教えて」              → Researcher エージェント
+「PF大丈夫？」                     → Health Checker エージェント
 ```
 
 ### 影響範囲に応じたテスター選定
 
 変更が特定のスキルに限定される場合、関連テスターのみで結合試験を実施してよい。
-ただしコアモジュール（`src/core/`）の変更は全テスター必須。
+ただし共通モジュール（`src/data/common.py`, `src/data/ticker_utils.py`）の変更は全テスター必須。
 
 ## 7. ドキュメント・ルール更新
 
 **機能実装後、マージ前に必ず以下を確認・更新する。**
 
-### 自動生成ドキュメント（KIK-525）
-
-以下は `scripts/generate_docs.py all` で自動生成されるため手動更新不要:
-
-| 対象 | 自動生成内容 |
-|:---|:---|
-| `docs/api-reference.md` | src/ の public 関数・クラスのシグネチャ |
-| `CLAUDE.md` Architecture | レイヤー概要（モジュール一覧 + KIK アノテーション） |
-| `development.md` テスト数 | `約NNNテスト` のカウント |
-| `docs/skill-catalog.md` 概要 | スキル一覧テーブル |
-
-pre-commit hook で src/ 変更時に自動実行される。新しいモジュールにKIKアノテーションを付けたい場合は `config/module_annotations.yaml` を編集する。
-
-### 手動更新チェックリスト
+### 更新チェックリスト
 
 | 対象 | 更新条件 | 更新内容 |
 |:---|:---|:---|
-| `intent-routing.md` | 新しいキーワード・意図が増えた | ドメイン判定テーブル、キーワード追加 |
-| 該当 `SKILL.md` | スキルの機能・出力が変わった | description、出力項目、コマンド例 |
-| `rules/portfolio.md` | PF系の機能が追加・変更された | セクション追加、KIK番号追記 |
-| `rules/screening.md` | スクリーニング系の機能が追加・変更された | ルール追記 |
-| `docs/data-models.md` | stock_info/stock_detail のフィールドが変わった | テーブル更新（fixture と整合性検証あり） |
-| `README.md` | ユーザー向けの機能説明が必要 | スキル説明、使用例 |
+| 該当 `agent.md` + `examples.yaml` | エージェントの役割・ツールが変わった | 判断プロセス、few-shot 例 |
+| `routing.yaml` | 新しい意図パターンが増えた | triggers、examples 追加 |
+| `orchestration.yaml` | リトライ・レビュー条件が変わった | ルール追加 |
+| `CLAUDE.md` | アーキテクチャが変わった | 構成図、ツール一覧 |
+| `docs/data-models.md` | stock_info/stock_detail のフィールドが変わった | テーブル更新 |
+| `README.md` | ユーザー向けの機能説明が必要 | 使い方、セットアップ |
 
 ### 判断基準
 
-- **新機能追加**: intent-routing + SKILL.md + README.md を手動更新（CLAUDE.md Architecture は自動）
-- **既存機能の改善**: 該当する SKILL.md + rules のみ
-- **バグ修正のみ**: ドキュメント更新不要（ただし挙動が変わる場合は SKILL.md を更新）
+- **新機能追加**: agent.md + examples.yaml + routing.yaml + README.md を更新
+- **既存機能の改善**: 該当 agent.md + examples.yaml のみ
+- **バグ修正のみ**: ドキュメント更新不要（ただし挙動が変わる場合は agent.md を更新）
 
 ## 8. 完了
 

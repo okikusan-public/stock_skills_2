@@ -1,0 +1,307 @@
+# Risk Assessor Agent — Few-shot Examples
+# 6指標のスコアリング → 合計 → 判定 → PFバランス目標
+
+scoring_rules:
+  # 境界値は下限を含む（例: VIX 18 は neutral）
+  vix:
+    risk_on: "< 18"
+    neutral: "18 - 25"
+    risk_off: "> 25"
+  us_10y:
+    risk_on: "3.0% - 4.5%"        # 修正: 3.0-3.5%の穴を解消
+    neutral: "4.5% - 5.0%"
+    risk_off: "> 5.0% or < 3.0%"  # 3.0%未満 = デフレ/景気後退懸念
+  ism:
+    risk_on: "> 50"
+    neutral: "47 - 50"
+    risk_off: "< 47"
+  fear_greed:
+    risk_on: "> 60"
+    neutral: "40 - 60"
+    risk_off: "< 40"
+  wti:
+    risk_on: "$55 - $85"           # 修正: $55-60の穴を解消
+    neutral: "$85 - $95"
+    risk_off: "> $95 or < $55"
+  yield_curve:
+    risk_on: "> 0.5%"
+    neutral: "0% - 0.5%"
+    risk_off: "< 0% (逆イールド)"
+
+verdict_rules:
+  risk_on: "合計 >= +3"
+  neutral: "-2 <= 合計 <= +2"
+  risk_off: "合計 <= -3"
+
+# 強制ルール（スコアに関係なくオーバーライド）
+force_rules:
+  force_risk_off:
+    - "VIX > 40（パニック水準）"
+    - "F&G < 10（極端な恐怖）"
+    - "WTI > $110（エネルギーショック）"
+    - "上記いずれかに該当 → スコアに関係なく強制 risk-off"
+  note: "強制risk-off中の逆張りは、VIXがピークから20%以上低下してから検討"
+
+contrarian_rules:
+  overbought: "F&G > 80 AND VIX < 15 → グロース利確検討"
+  oversold: "F&G < 25 AND VIX > 30 → 押し目買いの好機"
+  priority: "逆張りシグナルは通常判定を修正する。risk-on判定でも買われすぎならキャッシュ積み増し"
+
+# PFターゲット定義は config/allocation.yaml を SSoT とする (KIK-685)
+# role_targets / concentration / currency / geography は全て allocation.yaml から Read して取得
+pf_targets_source: "config/allocation.yaml"
+
+examples:
+  # === 典型的な risk-on ===
+  - intent: "リスク判定して"
+    input: {vix: 15, tnx: 4.0, ism: 52, fg: 72, wti: 78, yc: 0.8}
+    scores: {vix: +1, tnx: +1, ism: +1, fg: +1, wti: +1, yc: +1}
+    total: +6
+    verdict: risk-on
+    contrarian: なし
+    pf_target: {income: "45-55%", growth: "25-30%", hedge: "5%", cash: "15-20%"}
+    reasoning: "全指標がrisk-on。経済拡大+低VIX+適正金利。グロース比率を高めに"
+
+  # === 典型的な neutral ===
+  - intent: "市況チェック"
+    input: {vix: 21, tnx: 4.7, ism: 49, fg: 50, wti: 90, yc: 0.2}
+    scores: {vix: 0, tnx: 0, ism: 0, fg: 0, wti: 0, yc: 0}
+    total: 0
+    verdict: neutral
+    contrarian: なし
+    pf_target: {income: "45-55%", growth: "25-30%", hedge: "5%", cash: "15-20%"}
+    reasoning: "全指標がneutral。方向感なし。インカム中心で様子見"
+
+  # === 典型的な risk-off ===
+  - intent: "暴落してる"
+    input: {vix: 31, tnx: 5.2, ism: 45, fg: 28, wti: 101, yc: -0.4}
+    scores: {vix: -1, tnx: -1, ism: -1, fg: -1, wti: -1, yc: -1}
+    total: -6
+    verdict: risk-off
+    contrarian: なし
+    pf_target: {income: "50-55%", growth: "10-20%", hedge: "5-10%", cash: "25-35%"}
+    reasoning: "全指標がrisk-off。景気後退+高金利+原油高。グロースを大幅縮小、キャッシュを厚く"
+
+  # === risk-on 下限（現在の市況に近い） ===
+  - intent: "今の市況はどう？"
+    input: {vix: 19.3, tnx: 4.29, ism: 52.7, fg: 70, wti: 93, yc: 0.49}
+    scores: {vix: 0, tnx: +1, ism: +1, fg: +1, wti: 0, yc: 0}
+    total: +3
+    verdict: risk-on（下限）
+    contrarian: なし
+    pf_target: {income: "45-55%", growth: "25-30%", hedge: "5%", cash: "15-20%"}
+    note: "F&G70はGreed圏で急反転リスク。原油$95超えでneutral転落。フルrisk-onは危険"
+    reasoning: "ギリギリrisk-on。経済指標は堅調だが原油高+VIX上昇傾向で不安定"
+
+  # === risk-off + 売られすぎ（逆張り好機） ===
+  - intent: "今買い時？"
+    input: {vix: 35, tnx: 4.8, ism: 46, fg: 18, wti: 72, yc: -0.2}
+    scores: {vix: -1, tnx: 0, ism: -1, fg: -1, wti: +1, yc: -1}
+    total: -3
+    verdict: risk-off
+    contrarian: "F&G18 + VIX35 = 売られすぎ。押し目買いの好機"
+    action: "キャッシュ25%のうち10%を使って、RSI<35のインカム優良銘柄を買い増し"
+    pf_target: {income: "50-55%", growth: "10-20%", hedge: "5-10%", cash: "25-35%"}
+    reasoning: "risk-offだが極端な恐怖は逆張りシグナル。パニック時にインカム優良株を拾う"
+
+  # === risk-on + 買われすぎ（利確シグナル） ===
+  - intent: "利確すべき？"
+    input: {vix: 12, tnx: 3.8, ism: 55, fg: 85, wti: 75, yc: 1.2}
+    scores: {vix: +1, tnx: +1, ism: +1, fg: +1, wti: +1, yc: +1}
+    total: +6
+    verdict: risk-on
+    contrarian: "F&G85 + VIX12 = 買われすぎ。グロースの利確検討"
+    action: "グロース枠でRSI>70の銘柄を一部利確。キャッシュを15%→20%に引き上げ"
+    pf_target: {income: 45%, growth: 30%, hedge: 5%, cash: 20%}
+    reasoning: "数値上はrisk-onだが、センチメントが極端に楽観。反落に備えてグロースをトリム"
+
+  # === 地政学ショック（強制risk-off） ===
+  - intent: "戦争始まった"
+    input: {vix: 40, tnx: 4.0, ism: 51, fg: 15, wti: 110, yc: 0.3}
+    scores: {vix: -1, tnx: +1, ism: +1, fg: -1, wti: -1, yc: 0}
+    total: -1
+    verdict: "スコアはneutralだが、VIX40+F&G15+WTI110の極端値 → 強制risk-off"
+    contrarian: "F&G15 = 極端な恐怖。ただし地政学ショック時は逆張りを急がない"
+    action: "グロースを即座にトリム。キャッシュ25%以上に。落ち着いてから押し目検討"
+    pf_target: {income: "50-55%", growth: "10-20%", hedge: "5-10%", cash: "25-35%"}
+    reasoning: "地政学ショック時はスコアに関係なく強制risk-off。VIX40超は即時防御"
+
+  # =================================================================
+  # 歴史的パターン（Gemini 3.1 Pro + Grok 調査に基づく）
+  # =================================================================
+
+  # === スタグフレーション（現代版。インフレ+景気減速の同時進行） ===
+  - intent: "インフレ止まらないのに景気悪い"
+    input: {vix: 28, tnx: 5.0, ism: 46, fg: 25, wti: 98, yc: -0.5}
+    scores: {vix: -1, tnx: -1, ism: -1, fg: -1, wti: -1, yc: -1}
+    total: -6
+    verdict: risk-off（スタグフレーション）
+    action: "株・債券を大幅削減。コモディティ（GLDM）とキャッシュを拡充。インカム型でも高Beta銘柄は縮小"
+    pf_target: {income: 50%, growth: 5%, hedge: 15%, cash: 30%}
+    reasoning: "物価高+不況の併発。中銀がインフレ抑制を優先し利下げできず、株と債券が同時安になる最悪の局面。2022年後半の環境に類似"
+
+  # === 金融危機（リーマン・ショック2008型） ===
+  - intent: "銀行が潰れそう"
+    input: {vix: 80, tnx: 1.5, ism: 35, fg: 3, wti: 40, yc: 2.0}
+    scores: {vix: -1, tnx: -1, ism: -1, fg: -1, wti: -1, yc: +1}
+    total: -4
+    verdict: "強制risk-off（VIX80超で強制発動）"
+    contrarian: "F&G3は極端な恐怖。ただし信用収縮時は底が見えるまで逆張りしない。VIXがピークから20%低下するまで待つ"
+    action: "全リスク資産を売却し短期国債と現金へ完全退避。金融セクター（USB等）は即売却。流動性確保が最優先"
+    pf_target: {income: 30%, growth: 0%, hedge: 15%, cash: 55%}
+    reasoning: "リーマン時VIXは80超、コロナ時は82。信用収縮では優良銘柄も換金売りされる。初動は全売却、落ち着いてから買い戻し"
+
+  # === 通貨危機（1997年アジア通貨危機型） ===
+  - intent: "新興国通貨が暴落してる"
+    input: {vix: 32, tnx: 5.2, ism: 49, fg: 20, wti: 70, yc: 0.2}
+    scores: {vix: -1, tnx: -1, ism: 0, fg: -1, wti: +1, yc: 0}
+    total: -2
+    verdict: neutral（だが新興国資産は縮小検討）
+    action: "新興国資産（AUTO.JK, Z74.SI）を段階的に縮小。全売却ではなく半分程度に。先進国インカムは維持"
+    pf_target: {income: 55%, growth: 20%, hedge: 10%, cash: 15%}
+    reasoning: "米高金利が新興国からの資金逆流を誘発。ただし通貨危機の影響は地域差が大きく、SG(先進国寄り)とID(新興国)で深刻度が異なる。全新興国一律の即退避は過剰反応"
+    note: "PFのASEAN比率（SGD7%+IDR5%=12%）。AUTO.JK(IDR)はZ74.SI(SGD)より影響大。個別判断"
+
+  # === バブル崩壊（2000年ITバブル崩壊型） ===
+  - intent: "テック株が急落してる"
+    input: {vix: 35, tnx: 3.5, ism: 43, fg: 15, wti: 60, yc: -0.2}
+    scores: {vix: -1, tnx: 0, ism: -1, fg: -1, wti: +1, yc: -1}
+    total: -3
+    verdict: risk-off（バブル崩壊）
+    action: "グロース株（AMZN/NVDA/NFLX/CEG）を大幅削減。ディフェンシブ+高配当に集中"
+    pf_target: {income: 60%, growth: 5%, hedge: 10%, cash: 25%}
+    reasoning: "過大評価のメルトダウン。ISM悪化で実体経済も冷え込み、高バリュエーション株から崩壊。PFのAIテーマ集中（30%超）が直撃する"
+    note: "JEPI（S&P500連動）もグロースと同方向に下落する。インカムではなくグロース扱い"
+
+  # === 政策転換（1994年FRB電撃利上げ型） ===
+  - intent: "急に利上げされた"
+    input: {vix: 20, tnx: 5.0, ism: 56, fg: 45, wti: 80, yc: 0.5}
+    scores: {vix: 0, tnx: -1, ism: +1, fg: 0, wti: +1, yc: +1}
+    total: +2
+    verdict: neutral（だが金利急騰に注意）
+    action: "長期債のデュレーションを短期化。グロース株のPERが高い銘柄をトリム。バリュー株へ移行"
+    pf_target: {income: 55%, growth: 20%, hedge: 5%, cash: 20%}
+    reasoning: "好景気下の急激な金融引き締め。1994年利上げ時のVIXは10-20台前半。景気堅調でVIXは低いが、金利急騰がバリュエーションを圧縮"
+    note: "NVDA(PE高)やCEGが影響大。JEPI/USBの金融セクターは金利上昇の恩恵側"
+
+  # === コロナショック（2020年3月型・外生ショック） ===
+  - intent: "パンデミック発生"
+    input: {vix: 82, tnx: 0.5, ism: 42, fg: 3, wti: 30, yc: 0.8}
+    scores: {vix: -1, tnx: -1, ism: -1, fg: -1, wti: -1, yc: +1}
+    total: -4
+    verdict: "強制risk-off（VIX82で強制発動）"
+    contrarian: "F&G3 + VIX82 = 歴史的売られすぎ。ただし底値は不明。VIXがピークから20%低下してから段階的に拾う"
+    action: "初動は全リスク資産を縮小（優良銘柄含む）。流動性危機では換金売りが優良株にも及ぶ。VIX低下後に段階的に買い戻し"
+    pf_target: {income: 35%, growth: 0%, hedge: 10%, cash: 55%}
+    reasoning: "コロナ時VIX82。外生ショックは回復も早い（V字）が、初動では優良銘柄も無差別に換金売りされた。初期ホールドは危険。底値確認後に買い戻す"
+
+  # === risk-on だが地政学トリガー接近（2026年4月型） ===
+  - intent: "リスク判定して（地政学リスク考慮）"
+    input: {vix: 19, tnx: 4.3, ism: 53, fg: 70, wti: 93, yc: 0.5}
+    scores: {vix: 0, tnx: +1, ism: +1, fg: +1, wti: 0, yc: 0}
+    total: +3
+    verdict: risk-on（下限）
+    geopolitical:
+      situation: "イラン停戦交渉停滞。ホルムズ海峡で船舶拿捕発生。封鎖持続なら原油$130+リスク"
+      threshold_proximity: "⚠️ 原油$93→$95閾値まで$2。1ニュースでneutral転落"
+      vix_proximity: "VIX19→40閾値まで21pt。まだ距離あり"
+    adjusted_verdict: "実質neutral。地政学リスクが閾値に極めて近い"
+    pattern_match: "risk-on下限パターン（例4）に近いが、地政学要因で1段階慎重化"
+    action: "フルrisk-onへの調整は見送り。インカム補強（UL等）に限定。新規グロース追加は控える"
+    pf_target: {income: "45-55%", growth: "25-30%", hedge: "5%", cash: "15-20%"}
+    reasoning: "定量スコアはrisk-onだが、原油$95まで$2で地政学トリガーが極めて近い。フルrisk-onは危険。neutral目標で行動する"
+
+  # === ゴルディロックス相場（2017年型・低VIX長期安定） ===
+  - intent: "何も起きない安定相場"
+    input: {vix: 11, tnx: 3.5, ism: 58, fg: 75, wti: 65, yc: 1.0}
+    scores: {vix: +1, tnx: +1, ism: +1, fg: +1, wti: +1, yc: +1}
+    total: +6
+    verdict: risk-on
+    contrarian: "VIX11は歴史的低水準。低VIXが長期化すると急騰リスクが蓄積"
+    action: "risk-on だが過信しない。グロースは35%を上限に。VIX急騰に備えてヘッジ（プット等）を薄く持つ"
+    pf_target: {income: "45-55%", growth: "25-30%", hedge: "5%", cash: "15-20%"}
+    reasoning: "ゴルディロックス（適温相場）は心地よいが永続しない。2017年の低VIX後に2018年2月のVIXショックが来た"
+
+  # =================================================================
+  # トレンドシグナル（方向を先読みする）
+  # =================================================================
+  #
+  # 単一時点のスコアだけでなく、指標の「方向」を見る。
+  # 2つの時間軸でトレンドを判定する:
+  #
+  # ■ 短期トレンド（4週間）: 直近の方向変化を検出。先行シグナル
+  # ■ 中期トレンド（12週間）: マクロサイクルの転換点を検出。構造変化
+  #
+  # 判定方法:
+  #   各指標の変化を計算:
+  #   - 悪化方向に3週以上連続 → trend_warning（-1）
+  #   - 改善方向に3週以上連続 → trend_positive（+1）
+  #   - 横ばい or 方向不定 → trend_neutral（0）
+  #
+  # 短期トレンドスコアが -3以下 → 「risk-offに向かっている」先行警告
+  # 中期トレンドスコアが -3以下 → 「マクロ環境が悪化」構造的警告
+  # 短期と中期が同方向 → 確信度が高い
+  # 短期と中期が逆方向 → 転換点の可能性。注意深く観察
+
+  trend_rules:
+    vix:
+      worsening: "3週以上連続上昇（例: 15→17→19→21）"
+      improving: "3週以上連続低下"
+    tnx:
+      worsening: "4.5%に向けて上昇中"
+      improving: "4.0%に向けて低下中"
+    ism:
+      worsening: "50割れに向けて低下中"
+      improving: "50超えに向けて上昇中"
+    fg:
+      worsening: "40に向けて低下中"
+      improving: "60に向けて上昇中"
+    wti:
+      worsening: "$95に向けて上昇中"
+      improving: "$85に向けて低下中"
+    yc:
+      worsening: "0%に向けてフラット化（逆イールド接近）"
+      improving: "スティープ化（金利差拡大）"
+
+  trend_examples:
+    # === risk-offに向かっている先行警告 ===
+    - intent: "最近じわじわ悪くなってない？"
+      current: {vix: 21, tnx: 4.4, ism: 50, fg: 48, wti: 91, yc: 0.3}
+      current_verdict: neutral（スコア0）
+      trend_4w: {vix: "15→17→19→21 ↑↑↑", tnx: "4.1→4.2→4.3→4.4 ↑↑↑", ism: "53→52→51→50 ↓↓↓", fg: "65→58→52→48 ↓↓↓", wti: "78→83→87→91 ↑↑↑", yc: "0.6→0.5→0.4→0.3 ↓↓↓"}
+      trend_score: -6
+      warning: "全指標がrisk-off方向に悪化中。現時点はneutralだが、1-2週以内にrisk-off転落の可能性大"
+      action: "先行してグロースを縮小し始める。キャッシュを15%→20%に引き上げ。新規購入を停止"
+      reasoning: "点ではneutralだが線ではrisk-offに向かっている。待ってから動くと遅い"
+
+    # === risk-onに向かっている好転シグナル ===
+    - intent: "最近良くなってきた？"
+      current: {vix: 22, tnx: 4.3, ism: 49, fg: 42, wti: 88, yc: 0.1}
+      current_verdict: neutral（スコア-1）
+      trend_4w: {vix: "30→27→24→22 ↓↓↓", tnx: "4.8→4.6→4.4→4.3 ↓↓↓", ism: "46→47→48→49 ↑↑↑", fg: "22→30→35→42 ↑↑↑", wti: "98→95→92→88 ↓↓↓", yc: "-0.3→-0.1→0.0→0.1 ↑↑↑"}
+      trend_score: +6
+      signal: "全指標がrisk-on方向に改善中。現時点はneutralだが、回復トレンドが明確"
+      action: "押し目買いの準備。RSI<35のインカム優良銘柄をウォッチリストに追加。キャッシュ投入の準備"
+      reasoning: "点ではまだneutralだが線ではrisk-onに向かっている。恐怖が残っている間に仕込む"
+
+    # === 現在のPFに当てはめた例 ===
+    - intent: "今のトレンドは？"
+      current: {vix: 19.3, tnx: 4.29, ism: 52.7, fg: 70, wti: 93, yc: 0.49}
+      current_verdict: "risk-on（+3、下限）"
+      trend_4w: {vix: "17.5→18.9→19.5→19.3 ↑↑→", fg: "25→45→65→70 ↑↑↑↑", wti: "83→87→90→93 ↑↑↑"}
+      trend_mixed: true
+      warning: "F&Gが4週で25→70に急騰（過去Extreme Fear→Greed）。急反転リスク。原油も上昇トレンド継続で$95接近"
+      positive: "ISMは拡大圏維持。金利は安定。VIXは横ばい化"
+      action: "risk-onだがトレンドは混在。F&G急騰はバブル的楽観の兆候。新規グロース追加は控え、インカム補強（UL等）に限定"
+      pf_specific: "AMZN RSI76はトレンド的にも過熱。NFLX/CEGはDC継続で回復トレンドに乗れていない"
+
+individual_stock_signals:
+  overbought:
+    condition: "RSI > 70 AND volume > 1.5x 20日平均"
+    action: "利確検討（NFLX教訓: RSI79で見逃し→含み益消失）"
+  oversold:
+    condition: "RSI < 35 AND ファンダ健全（利益成長プラス）"
+    action: "押し目買い候補（UL RSI36の事例）"
+  recovery:
+    condition: "ATH-30%超下落 AND ROE>20% AND カタリスト発生"
+    action: "リカバリー株エントリー候補（NFLX教訓）"

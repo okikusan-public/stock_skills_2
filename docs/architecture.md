@@ -2,9 +2,10 @@
 
 ## System Overview
 
-自然言語ファーストの投資分析システム。ユーザーは日本語で意図を伝えるだけで、スクリーニング・個別銘柄分析・ポートフォリオ管理・リスク評価・知識グラフ照会が自動実行される。
+自然言語ファーストの投資分析システム。Agentic AI Pattern で設計。
+ユーザーは日本語で意図を伝えるだけで、オーケストレーターが適切なエージェントを自律的に選択・起動する。
 
-Claude Code Skills として動作し、Yahoo Finance API (yfinance) + Grok API (X/Web検索) + Neo4j (知識グラフ) + TEI (ベクトル検索, KIK-420) を統合。
+Claude Code Skills として動作し、Yahoo Finance API (yfinance) + Grok API (X/Web検索) + Neo4j (GraphRAG) + マルチLLM (Gemini/GPT/Grok) を統合。
 
 ---
 
@@ -13,61 +14,42 @@ Claude Code Skills として動作し、Yahoo Finance API (yfinance) + Grok API 
 ```mermaid
 graph TD
     User["ユーザー（自然言語）"]
-    IR["Intent Routing<br/>.claude/rules/intent-routing.md"]
 
-    subgraph Skills["Skills Layer (.claude/skills/*/SKILL.md → scripts/*.py)"]
-        SS["screen-stocks"]
-        SR["stock-report"]
-        MR["market-research"]
-        WL["watchlist"]
-        ST["stress-test"]
-        SP["stock-portfolio"]
-        IN["investment-note"]
-        GQ["graph-query"]
+    subgraph Orchestrator["Orchestrator (.claude/skills/stock-skills/)"]
+        SKILL["SKILL.md"]
+        ROUTE["routing.yaml"]
+        ORCH["orchestration.yaml"]
     end
 
-    subgraph Core["Core Layer (src/core/)"]
-        SC["screening/<br/>screener, indicators,<br/>filters, alpha, technicals"]
-        PF["portfolio/<br/>manager, concentration,<br/>rebalancer, simulator, backtest"]
-        RK["risk/<br/>correlation, shock,<br/>scenario, recommender"]
-        RS["research/<br/>researcher"]
-        HC["health_check"]
-        RE["return_estimate"]
-        VT["value_trap"]
-        MD["models, common,<br/>ticker_utils"]
+    subgraph Agents[".claude/agents/"]
+        SCR["Screener<br/>銘柄探し"]
+        ANA["Analyst<br/>バリュエーション"]
+        RES["Researcher<br/>ニュース・センチメント"]
+        HC["Health Checker<br/>PFの事実・数値"]
+        STR["Strategist<br/>投資判断・レコメンド"]
+        RA["Risk Assessor<br/>市場リスク判定"]
+        REV["Reviewer<br/>品質・リスクチェック"]
     end
 
-    subgraph Data["Data Layer (src/data/)"]
-        YC["yahoo_client<br/>(24h JSON cache)"]
-        GC["grok_client<br/>(XAI_API_KEY)"]
-        HS["history_store<br/>(JSON蓄積)"]
-        GS["graph_store<br/>(Neo4j CRUD)"]
-        GQM["graph_query<br/>(Cypher照会)"]
-        NL["graph_nl_query<br/>(NL→Cypher)"]
-        NM["note_manager<br/>(JSON+Neo4j dual-write)"]
+    subgraph Tools["tools/"]
+        YF["yahoo_finance.py"]
+        GR["graphrag.py"]
+        GK["grok.py"]
+        LLM["llm.py"]
     end
 
-    subgraph Markets["Markets Layer (src/markets/)"]
-        JP["japan"]
-        US["us"]
-        AS["asean"]
+    subgraph Data["src/data/"]
+        YC["yahoo_client/"]
+        GC["grok_client/"]
+        GS["graph_store/"]
+        GQ["graph_query/"]
+        CTX["context/"]
     end
 
-    subgraph Output["Output Layer (src/output/)"]
-        FM["formatter"]
-        SF["stress_formatter"]
-        PFM["portfolio_formatter"]
-        RF["research_formatter"]
-    end
-
-    User --> IR --> Skills
-    Skills --> Core
-    Core --> Data
-    Core --> Markets
-    Core --> Output
-    Data --> YC
-    Data --> GC
-    Data --> GS
+    User --> Orchestrator
+    Orchestrator --> Agents
+    Agents --> Tools
+    Tools --> Data
 ```
 
 ---
@@ -75,34 +57,31 @@ graph TD
 ## Data Flow
 
 ```
-1. ユーザー発言
+1. ユーザー発言（自然言語）
    ↓
-2. Auto Context Injection (graph-context.md + scripts/get_context.py)
-   ├─ ティッカー/企業名検出 → Neo4j 照会 → 過去の経緯取得
-   └─ グラフ状態に基づくスキル推奨
+2. Orchestrator (SKILL.md)
+   ├─ routing.yaml で意図→エージェントを判定
+   ├─ 記録系（メモ・売買記録）→ 直接実行（action: direct）
+   └─ 分析系 → エージェントをサブエージェントとして起動
    ↓
-3. Intent Routing (intent-routing.md)
-   ├─ ドメイン判定（発見/分析/保有管理/リスク/監視/記録/知識/メタ）
-   └─ スキル選択 + パラメータ推定（コンテキスト推奨 + ユーザー意図で最終判断）
+3. Agent (agent.md + examples.yaml)
+   ├─ GraphRAG で過去のコンテキストを取得
+   ├─ tools/ 経由でデータ取得
+   ├─ 自律的に判断・計算・整形
+   └─ 投資判断を伴う出力 → Reviewer を自動挿入
    ↓
-4. Skill Script (scripts/*.py)
-   ├─ argparse CLI
-   └─ sys.path.insert で src/ を import
+4. Tools (tools/*.py)
+   ├─ yahoo_finance: yfinance + 24h JSON cache
+   ├─ graphrag: Neo4j GraphRAG (dual-write)
+   ├─ grok: Grok API (X/Web検索)
+   └─ llm: Gemini/GPT/Grok (マルチLLMレビュー)
    ↓
-5. Core Module (src/core/)
-   ├─ ビジネスロジック実行
-   └─ Data Layer 経由でデータ取得
+5. 結果表示 + GraphRAG に自動蓄積
    ↓
-6. Data Layer (src/data/)
-   ├─ yahoo_client: yfinance + 24h JSON cache
-   ├─ grok_client: Grok API (X/Web検索)
-   ├─ graph_store: Neo4j CRUD (MERGE ベース)
-   └─ history_store: 実行結果の JSON 蓄積
-   ↓
-7. Output Layer (src/output/)
-   └─ Markdown テーブル/レポートとして整形
-   ↓
-8. 結果表示 + history_store/graph_store に自動蓄積
+6. Orchestration (orchestration.yaml)
+   ├─ 0件 → 条件緩和してリトライ
+   ├─ Reviewer FAIL → 差し戻し
+   └─ 上限到達 → 現状の結果を提示
 ```
 
 ---
@@ -110,82 +89,50 @@ graph TD
 ## Design Principles
 
 ### 1. Natural Language First
-ユーザーインターフェースは自然言語。スラッシュコマンドは内部実装であり、ユーザーには見えない。`intent-routing.md` がすべての入口。
+ユーザーインターフェースは自然言語。`routing.yaml` がすべての入口。エージェントが自律的にパラメータを決定する。
 
-### 2. Dual-Write Pattern (JSON master + Neo4j view)
+### 2. Agentic AI Pattern
+- **Orchestrator** (SKILL.md): どのエージェントを呼ぶか
+- **Agents** (agent.md): 判断・計算・整形を自律実行
+- **Tools** (tools/): データ取得のみ。判断しない
+- **Few-shot** (examples.yaml): エージェントの行動をサンプルで示す
+
+### 3. Dual-Write Pattern (JSON master + Neo4j view)
 - JSON ファイルが master データソース（常に書き込み成功）
 - Neo4j は view（検索・関連付け用）。try/except で graceful degradation
 - Neo4j が落ちても全機能が動作する
 
-### 3. HAS_MODULE Graceful Degradation
-スクリプト層 (run_*.py) は `try/except ImportError` で各モジュールの存在を確認:
-```python
-try:
-    from src.data import graph_store
-    HAS_GRAPH = True
-except ImportError:
-    HAS_GRAPH = False
-```
+### 4. Multi-LLM Review & DeepThink 4-Swarm
+Reviewer エージェントが3つのLLM（GPT/Gemini/Claude）を並列で起動し、異なる視点からレビュー。APIキー未設定時は全て Claude で実行（graceful degradation）。
 
-### 4. 24h JSON Cache
-`yahoo_client/` パッケージ（KIK-449）はレスポンスを `data/cache/` に JSON キャッシュ（TTL 24時間）。APIレート制限を回避しつつ、十分な鮮度を維持。
+DeepThink モードでは **2層モデルの 4-Swarm** で評価:
+- **インフラ層（固定）**: Grok=X/リアルタイム市場データ、Gemini=Google検索+長コンテキスト（ハード制約: 他LLMで代替不可）
+- **推論層（動的）**: Devil's Advocate / Scenario Analyst / Lesson Auditor / Portfolio Aligner をテーマに応じて GPT/Gemini/Grok/Claude に割り当て
+- Claude 自身もオーケストレーター層で推論に参加（Agent 起動不要）
 
-### 5. Idempotent Graph Writes
-`graph_store.py` のすべての書き込みは MERGE ベース。同じデータを複数回書き込んでも結果が変わらない。
+### 5. Self-Healing Orchestration
+orchestration.yaml に基づく自律修正ループ。スクリーニング0件→条件緩和、Reviewer FAIL→差し戻し。ユーザーに聞くのは売買の最終実行のみ。
 
 ---
 
-## Module Summary
+## Agent Summary
 
-### Core Modules (src/core/)
+| エージェント | 役割 | 使用ツール | デフォルトLLM |
+|:---|:---|:---|:---|
+| Screener | 銘柄探し・スクリーニング | yahoo_finance | Claude |
+| Analyst | バリュエーション・割安度判定 | yahoo_finance, graphrag | Claude |
+| Researcher | ニュース・センチメント・業界動向 | grok, graphrag | Grok |
+| Health Checker | PFの事実・数値（判断しない） | yahoo_finance, graphrag | Claude |
+| Strategist | 投資判断・レコメンド | yahoo_finance, graphrag | Claude |
+| Risk Assessor | 市場リスク判定（risk-on/neutral/risk-off） | yahoo_finance, WebSearch | Claude |
+| Reviewer | 品質・矛盾・リスクチェック | llm, graphrag | GPT+Gemini+Claude |
 
-| サブフォルダ | モジュール | 役割 |
+## Tool Summary
+
+| ツール | ソース | 役割 |
 |:---|:---|:---|
-| screening/ | screener.py | 8つのスクリーナー (Query/Value/Pullback/Alpha/Growth/Trending/Contrarian/Momentum) |
-| screening/ | indicators.py | バリュースコア (0-100点) + 株主還元率 + 安定度 |
-| screening/ | filters.py | ファンダメンタルズ条件フィルタ |
-| screening/ | query_builder.py | EquityQuery 構築 |
-| screening/ | alpha.py | 変化スコア (アクルーアルズ/売上加速/FCF/ROE趨勢) |
-| screening/ | technicals.py | 押し目判定 (RSI/BB/バウンススコア) |
-| portfolio/ | portfolio_manager.py | CSV ベースのポートフォリオ管理 |
-| portfolio/ | concentration.py | HHI 集中度分析 |
-| portfolio/ | rebalancer.py | リスク制約付きリバランス提案 |
-| portfolio/ | simulator.py | 複利シミュレーション (3シナリオ+配当再投資+積立) |
-| portfolio/ | backtest.py | 蓄積データからリターン検証 |
-| portfolio/ | portfolio_simulation.py | What-If シミュレーション |
-| portfolio/ | portfolio_bridge.py | PF CSV → ストレステスト連携 |
-| risk/ | correlation.py | 日次リターン・相関行列・因子分解 |
-| risk/ | shock_sensitivity.py | ショック感応度スコア |
-| risk/ | scenario_analysis.py | シナリオ分析 (実行ロジック) |
-| risk/ | scenario_definitions.py | 8シナリオ + ETF資産クラス定義 |
-| risk/ | recommender.py | ルールベース推奨アクション |
-| research/ | researcher.py | yfinance + Grok API 統合リサーチ |
-| (root) | health_check.py | 3段階アラート + クロス検出 + 還元安定度 |
-| (root) | return_estimate.py | アナリスト + 過去リターン + ニュース + Xセンチメント |
-| (root) | value_trap.py | バリュートラップ検出 |
-| (root) | models.py | dataclass 定義 |
-| (root) | common.py | 共通ユーティリティ |
-| (root) | ticker_utils.py | ティッカー推論 (通貨/地域マッピング) |
+| yahoo_finance.py | src/data/yahoo_client/ | 株価・ファンダメンタルズ・スクリーニング |
+| graphrag.py | src/data/graph_store/ + graph_query/ | Neo4j ナレッジグラフ |
+| grok.py | src/data/grok_client/ | Grok API（X/Web検索） |
+| llm.py | (直接API呼び出し) | Gemini/GPT/Grok マルチLLM |
 
-### Data Modules (src/data/)
-
-| モジュール | 役割 |
-|:---|:---|
-| yahoo_client/ | yfinance ラッパー + 24h JSON cache + 異常値ガード (KIK-449: detail/screen/history/macro/\_cache/\_normalize に分割) |
-| grok_client.py | Grok API (X検索/Web検索) + XAI_API_KEY 環境変数 |
-| grok_context.py | Grokプロンプト用コンパクト文脈抽出 (Neo4j→300トークン要約, KIK-488) |
-| history_store.py | スキル実行結果の JSON 自動蓄積 (data/history/) |
-| graph_store.py | Neo4j CRUD (21ノードタイプ, MERGE ベース, ベクトルインデックス(KIK-420)) |
-| graph_query.py | Neo4j 照会ヘルパー (6関数 + vector_search(KIK-420)) |
-| graph_nl_query.py | 自然言語 → Cypher テンプレートマッチ |
-| note_manager.py | 投資メモ管理 (JSON + Neo4j dual-write) |
-| auto_context.py | 自動コンテキスト注入 (ハイブリッド検索: シンボル+ベクトル(KIK-420), 鮮度判定(KIK-427)) |
-| embedding_client.py | TEI REST API クライアント (384次元ベクトル生成, KIK-420) |
-| summary_builder.py | ノードタイプ別 semantic_summary テンプレートビルダー (KIK-420) |
-
-### Config
-
-| ファイル | 内容 |
-|:---|:---|
-| config/screening_presets.yaml | 15プリセット定義 |
-| config/exchanges.yaml | 60+ 地域の取引所・閾値定義 |

@@ -1,0 +1,54 @@
+# LLM Capabilities — エージェントがLLM選択時に参照するルール定義
+# 最終検証: 2026-04-22
+
+providers:
+  gemini:
+    models:
+      gemini-3.1-pro-preview:
+        strengths: [long_context, structured_reasoning, scenario_analysis]
+        web_search: false
+        cost: medium
+        context_window: 1M
+        best_for: "シナリオ分析、長文推論、ロジック整合性チェック"
+      gemini-3-flash-preview:
+        strengths: [speed, cost_efficiency, grounding, thinking]
+        web_search: true  # Google Search Grounding
+        cost: low
+        best_for: "Web検索+推論の一体実行、事実確認"
+    notes:
+      - "gemini-2.5-pro は 2026年10月廃止予定"
+
+  gpt:
+    models:
+      gpt-5.4:
+        strengths: [critical_thinking, risk_analysis, devils_advocate]
+        web_search: false
+        reasoning: [none, low, medium, high]
+        cost: medium-high
+        context_window: 1.05M
+        best_for: "リスク分析、反論チェック、深い推論(high)"
+    notes:
+      - "reasoning_effort で推論深度を4段階制御"
+
+  grok:
+    models:
+      grok-4.20-0309-reasoning:
+        strengths: [realtime_news, x_sentiment, speed, market_pulse, long_context]
+        web_search: true  # Responses API 経由（tools/grok.py で対応済み）
+        cost: medium
+        context_window: 2M
+        best_for: "Xセンチメント、速報ニュース、市場リアルタイム反応"
+      grok-4-1-fast-reasoning:
+        strengths: [speed, cost_efficiency]
+        web_search: false
+        cost: very_low
+        best_for: "軽量な推論タスク、コスト重視"
+    notes:
+      - "web_search は tools/grok.py の search_* 関数で対応済み"
+      - "tools/llm.py の Chat Completions では web_search 未対応"
+
+# エージェントの選択ガイドライン（ゼロショット）:
+# 「最新の事実」→ grok(tools/grok.py) / gemini-flash(web_search=True)
+# 「深い推論」→ gpt-5.4 reasoning='high' / gemini-3.1-pro
+# 「速さ・コスト」→ gemini-flash / grok-fast
+# 「複数観点」→ gpt(リスク) + gemini(ロジック) + grok(センチメント) 並列

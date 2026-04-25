@@ -1,0 +1,96 @@
+# Tools — エージェント・スキルが参照するツール定義
+# 各ツールの関数名・役割・いつ使うかを一元管理する。
+# エージェント (agent.md) やスキル (SKILL.md) はこのファイルを参照し、
+# ツール一覧をベタ書きしない。
+
+tools:
+  yahoo_finance:
+    source: tools/yahoo_finance.py
+    functions:
+      screen_stocks:
+        description: "条件に合う銘柄を網羅的にスクリーニング"
+        when: "再投資・入替・候補選定時（必須）。AIの知識ベースから手動選定してはならない"
+      get_stock_info:
+        description: "個別銘柄の指標取得（PER/PBR/ROE/配当利回り/Beta等）"
+        when: "候補の詳細確認時、ヘルスチェック時"
+      get_price_history:
+        description: "価格履歴取得（RSI・SMA等のテクニカル計算用）"
+        when: "テクニカル確認時、ストレステスト時"
+
+  grok:
+    source: tools/grok.py
+    functions:
+      search_market:
+        description: "市場動向・マクロ情報・業界ニュースの検索"
+        when: "市況把握時、マクロ調査時"
+      search_x_sentiment:
+        description: "X(旧Twitter)上の投資家センチメント取得"
+        when: "候補の定性評価時、市場心理の確認時"
+
+  graphrag:
+    source: tools/graphrag.py
+    functions:
+      get_context:
+        description: "過去の分析・lesson・thesis・観察メモの取得（Neo4j GraphRAG）"
+        when: "初回分析時（必須）。銘柄の過去文脈を踏まえた判断に使う"
+      sync_all:
+        description: "data/ → GraphRAG の一括同期（notes + portfolio）"
+        when: "「syncして」「データを同期して」と言われた時"
+
+  llm:
+    source: tools/llm.py
+    functions:
+      call_llm:
+        description: "外部LLM（GPT/Gemini/Grok）の呼び出し"
+        when: "マルチLLMレビュー時、4-Swarm レビュー時"
+        note: "モデル名は config/llm_routing.yaml を参照。ハードコード禁止"
+      is_provider_available:
+        description: "指定プロバイダのAPIキーが設定されているか確認"
+        when: "LLM呼び出し前のチェック"
+
+  notes:
+    source: tools/notes.py
+    functions:
+      load_notes:
+        description: "教訓(lesson)・投資メモ(thesis/observation)の読込"
+        when: "初回分析時（必須）。過去の教訓との照合に使う"
+      save_note:
+        description: "投資メモ・教訓の保存"
+        when: "分析結果から教訓を記録する時"
+      check_exit_rule:
+        description: "exit-ruleノートの損切り/利確閾値と現在損益率を照合"
+        when: "売却判断時（必須）。事前設定した撤退ルールとの照合に使う"
+
+  portfolio_io:
+    source: tools/portfolio_io.py
+    functions:
+      load_portfolio:
+        description: "ポートフォリオ保有状況の読込（CSV）"
+        when: "PF関連テーマ時（必須）。配分・通貨・ロール分析に使う"
+
+  watchlist:
+    source: tools/watchlist.py
+    functions:
+      load_watchlist:
+        description: "ウォッチリスト読込"
+        when: "ウォッチ中銘柄の参照時"
+
+  scoring:
+    source: tools/scoring.py
+    functions:
+      score_quality:
+        description: "個別銘柄の3軸品質スコア（還元性・成長性・持続性）+ 4象限分類"
+        when: "銘柄の質を定量評価する時、入替候補の比較時"
+      score_portfolio:
+        description: "PF全銘柄の一括スコアリング + 4象限分類（保有/買い増し/要監視/売却検討）"
+        when: "PF全体の品質評価、要監視銘柄の特定時"
+
+  morning_summary:
+    source: tools/morning_summary.py
+    functions:
+      detect_alerts:
+        description: "PF全銘柄の数値ベース異常検知（exit-rule/RSI/決算接近/VIX）"
+        when: "朝サマリー時、PFの異常有無を確認する時"
+      format_morning_summary:
+        description: "異常検知結果を1分で読めるサマリーにフォーマット"
+        when: "detect_alertsの結果を人間向けに整形する時"

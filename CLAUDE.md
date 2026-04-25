@@ -4,66 +4,92 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Design Philosophy
 
-**このシステムは「自然言語ファースト」で設計されている。**
+**このシステムは「自然言語ファースト」の Agentic AI Pattern で設計されている。**
 
-ユーザーはスラッシュコマンドやパラメータを覚える必要はない。日本語で意図を伝えるだけで、適切なスキルが自動的に選択・実行される。
+ユーザーはコマンドやパラメータを覚える必要はない。日本語で意図を伝えるだけで、オーケストレーターが適切なエージェントを自律的に選択・起動する。
 
-- 「いい日本株ある？」→ スクリーニングが走る
-- 「トヨタってどう？」→ 個別レポートが出る
-- 「PF大丈夫かな」→ ヘルスチェックが実行される
-- 「改善点ある？」→ システム自身を分析して提案する
+- 「いい日本株ある？」→ Screener が自律的に region/preset を決めてスクリーニング
+- 「トヨタってどう？」→ Analyst がバリュエーション・テクニカル分析を実行
+- 「PF大丈夫かな」→ Health Checker が事実・数値を出し、Strategist がレコメンド
+- 「最新ニュース教えて」→ Researcher が Grok API でニュース・センチメントを取得
 
-スキル（`/screen-stocks` 等）はあくまで内部実装であり、ユーザーインターフェースではない。自然言語からの意図推論が第一の入口であり、コマンドは補助手段に過ぎない。
-
-新機能を追加する際は、**ユーザーがどんな言葉でその機能を呼び出すか**を常に考え、`intent-routing.md` にその表現を反映すること。
+エージェントはツール（tools/）を使ってデータを取得し、自分で判断・整形して出力する。
 
 ## Project Overview
 
-割安株スクリーニングシステム。Yahoo Finance API（yfinance）を使って日本株・米国株・ASEAN株・香港株・韓国株・台湾株等60地域から割安銘柄をスクリーニングする。Claude Code Skills として動作し、自然言語で話しかけるだけで適切な機能が実行される。
+投資アシスタントシステム。Yahoo Finance API（yfinance）、Grok API（xAI）、Neo4j（GraphRAG）を統合し、自然言語で銘柄探索・分析・ポートフォリオ管理・リスク評価を行う。Claude Code の Agentic AI Pattern で動作する。
 
 ## Commands
 
-各スキルのコマンド詳細は [docs/skill-catalog.md](docs/skill-catalog.md) を参照。
-
-### 代表コマンド
 ```bash
-# スクリーニング
-python3 .claude/skills/screen-stocks/scripts/run_screen.py --region japan --preset alpha --top 10
-
-# 個別レポート
-python3 .claude/skills/stock-report/scripts/generate_report.py 7203.T
-
-# ポートフォリオ
-python3 .claude/skills/stock-portfolio/scripts/run_portfolio.py snapshot
-
-# テスト
+# ユニットテスト
 python3 -m pytest tests/ -q
+
+# E2E テスト（実際の API でエージェント動作検証）
+python3 tests/e2e/run_e2e.py
 
 # 依存インストール
 pip install -r requirements.txt
 ```
 
+エージェントが自律的にツールを呼び出すため、ユーザーがスクリプトを直接実行する必要はない。
+
 ## Architecture
 
-詳細は [docs/architecture.md](docs/architecture.md)（3層構成・Mermaid図）、[docs/neo4j-schema.md](docs/neo4j-schema.md)（グラフスキーマ）、[docs/skill-catalog.md](docs/skill-catalog.md)（8スキル）を参照。
+詳細は [docs/architecture.md](docs/architecture.md)、[docs/neo4j-schema.md](docs/neo4j-schema.md) を参照。
 
-### レイヤー概要
-<!-- BEGIN AUTO-GENERATED ARCHITECTURE -->
 ```
-Skills (.claude/skills/*/SKILL.md → scripts/*.py) — 9スキル
-Core   (src/core/) — health/, portfolio/, ports/, research/, risk/, screening/, action_item_bridge (KIK-472: GraphRAG紐付け), action_item_detector (KIK-472: Linear連携), common, health_check (KIK-469: ETF対応+PF統合), health_etf (KIK-469/512: ETFヘルスチェック), health_labels (KIK-371/512: 長期適性ラベル生成), market_dashboard, models, proactive_engine (KIK-435), return_estimate (KIK-469 P2: volatility+is_etf), ticker_utils (KIK-449), value_trap (KIK-381)
-Data   (src/data/) — context/ (KIK-517: コンテキストモジュール集約), graph_query/ (KIK-508: submodule分割), graph_query_pkg/, graph_store/ (KIK-507: submodule分割), grok_client/ (KIK-508: submodule分割), grok_client_pkg/, history/ (KIK-512/517: 履歴ストアパッケージ), yahoo_client/ (KIK-449: submodule分割, KIK-469: ETFフィールド), embedding_client (KIK-420: TEIベクトル検索), lesson_community, lesson_conflict, linear_client (KIK-472), note_manager (KIK-473: journal type + auto symbol detection), user_profile
-Output (src/output/) — adjust_formatter (KIK-496), analyze_formatter, forecast_formatter, formatter, health_formatter (KIK-469 P2: stock/ETFテーブル分離), portfolio_formatter, rebalance_formatter (KIK-376), research_formatter, review_formatter (KIK-441), screening_summary_formatter (KIK-452/532), simulate_formatter (KIK-376), stress_formatter
+Orchestrator (.claude/skills/stock-skills/)
+  SKILL.md          — ルーティング・自律制御
+  routing.yaml      — エージェント選択 few-shot
+  orchestration.yaml — リトライ・エスカレーション
 
-Config: config/screening_presets.yaml (16 presets), config/exchanges.yaml (60+ regions)
-Rules:  .claude/rules/ (graph-context, intent-routing, workflow, development, screening, portfolio, testing)
-Docs:   docs/ (architecture, neo4j-schema, skill-catalog, api-reference, data-models)
+Agents (.claude/agents/)
+  screener/     — 銘柄探し・スクリーニング
+  analyst/      — 銘柄分析・バリュエーション評価
+  researcher/   — ニュース・センチメント・業界動向
+  health-checker/ — PFの事実・数値（判断しない）
+  strategist/   — 投資判断・レコメンド
+  risk-assessor/ — 市場リスク判定（risk-on/neutral/risk-off）
+  reviewer/     — 品質・矛盾・リスクチェック（マルチLLM）
+
+Tools (tools/)
+  yahoo_finance.py — 株価・ファンダメンタルズ（src/data/yahoo_client/ のファサード）
+  graphrag.py      — Neo4j ナレッジグラフ（src/data/graph_store/ + graph_query/ のファサード）
+  grok.py          — Grok API 検索（src/data/grok_client/ のファサード）
+  llm.py           — マルチLLM呼び出し（Gemini/GPT/Grok）
+  portfolio_io.py  — PF CSV 読み書き（src/data/portfolio_io のファサード）
+  notes.py         — 投資メモ読み書き（src/data/note_manager のファサード）
+  watchlist.py     — ウォッチリスト読み書き（JSON直接I/O）
+  scoring.py       — 3軸品質スコアリング（src/data/scoring.py のファサード）
+
+Data (src/data/)
+  yahoo_client/  — yfinance ラッパー（24h JSONキャッシュ）
+  grok_client/   — Grok API (xAI) ラッパー
+  graph_store/   — Neo4j 書き込み（dual-write）
+  graph_query/   — Neo4j 読み取り
+  context/       — 自動コンテキスト注入
+  history/       — 実行履歴ストア
+  note_manager   — 投資メモ管理
+  common.py      — 共通ユーティリティ（is_etf, safe_float 等）
+  ticker_utils.py — ティッカー推論（通貨/地域マッピング）
+  portfolio_io.py — PF CSV 読み書き
+  scoring.py     — 3軸品質スコアリング（還元性・成長性・持続性）
+
+Config: .claude/agents/screener/examples.yaml (regions, themes, presets, few-shot)
+Config: config/scoring.yaml (スコアリング重み・閾値・セクター別設定)
+Config: config/allocation.yaml (PFターゲットアロケーション・集中度制約・乖離判定)
+Config: config/llm_routing.yaml (LLM選択・モデルルーティング・コスト定義)
+Rules:  .claude/rules/ (development, workflow, testing)
+Docs:   docs/ (architecture, neo4j-schema, data-models)
+Tests:  tests/ (unit), tests/e2e/ (E2E agent scenarios)
 ```
-<!-- END AUTO-GENERATED ARCHITECTURE -->
 
 ## Post-Implementation Rule
 
-**機能実装後は必ずドキュメント・ルールを更新すること。** 詳細は `.claude/rules/workflow.md` の「7. ドキュメント・ルール更新」を参照。
+**機能実装後は必ず以下を確認・更新すること。**
 
-自動生成: `docs/api-reference.md`、`CLAUDE.md` Architecture、`development.md` テスト数、`docs/skill-catalog.md` 概要（pre-commit hook で自動実行）
-手動更新: `intent-routing.md`、該当 `SKILL.md`、`rules/*.md`、`README.md`
+- エージェント定義: 該当 `agent.md` + `examples.yaml`
+- ルーティング: `routing.yaml` の triggers/examples
+- ドキュメント: `CLAUDE.md`、`README.md`、`docs/architecture.md`
+- テスト: `python3 -m pytest tests/ -q` で全件 PASS を確認
