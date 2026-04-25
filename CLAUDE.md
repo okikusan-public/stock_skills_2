@@ -78,6 +78,8 @@ Data (src/data/)
 
 Config: .claude/agents/screener/examples.yaml (regions, themes, presets, few-shot)
 Config: config/scoring.yaml (スコアリング重み・閾値・セクター別設定)
+Config: config/allocation.yaml (PFターゲットアロケーション・集中度制約・乖離判定)
+Config: config/llm_routing.yaml (LLM選択・モデルルーティング・コスト定義)
 Rules:  .claude/rules/ (development, workflow, testing)
 Docs:   docs/ (architecture, neo4j-schema, data-models)
 Tests:  tests/ (unit), tests/e2e/ (E2E agent scenarios)

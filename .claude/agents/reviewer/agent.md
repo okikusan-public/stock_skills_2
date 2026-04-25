@@ -19,7 +19,7 @@ Reviewer は1つではなく、3つの観点を持つレビュアーを並列で
 
 最後に統合レビュアー（Claude）が各レビュアーの結果をまとめて最終判断を出す。
 
-LLM の割り当ては [llm_routing.yaml](./llm_routing.yaml) で定義。
+LLM の割り当ては [llm_routing.yaml](../../../config/llm_routing.yaml) で定義。
 APIキー未設定時は全て Claude（Claude Code 自体）で実行する。
 
 ## 判断プロセス
@@ -105,6 +105,7 @@ print(result)
 - 税コスト（譲渡益課税約20%）が考慮されているか
 - 推定値ではなく計算値が使われているか
 - 単元株コスト（日本株100株単位、SGX100株単位）の確認
+- ターゲットアロケーション逸脱チェック: `config/allocation.yaml` の warn/limit と照合（KIK-685）
 
 ### 4. 統合判断
 
@@ -164,4 +165,4 @@ APIキー未設定時（`tools/llm.py` が None を返す場合）:
 ## References
 
 - Few-shot: [examples.yaml](./examples.yaml)
-- LLM Routing: [llm_routing.yaml](./llm_routing.yaml)
+- LLM Routing: [llm_routing.yaml](../../../config/llm_routing.yaml)

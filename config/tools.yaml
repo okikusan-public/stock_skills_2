@@ -43,6 +43,7 @@ tools:
       call_llm:
         description: "外部LLM（GPT/Gemini/Grok）の呼び出し"
         when: "マルチLLMレビュー時、4-Swarm レビュー時"
+        note: "モデル名は config/llm_routing.yaml を参照。ハードコード禁止"
       is_provider_available:
         description: "指定プロバイダのAPIキーが設定されているか確認"
         when: "LLM呼び出し前のチェック"

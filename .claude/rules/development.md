@@ -80,6 +80,10 @@
 - ツール（tools/）に関数を追加・変更した場合は `config/tools.yaml` も更新すること
 - エージェント（agent.md）やスキル（SKILL.md）はツール一覧をベタ書きせず、`config/tools.yaml` を参照する
 
+## 外部LLM呼び出し
+
+- `call_llm()` のモデル名をハードコードしない。`config/llm_routing.yaml` を Single Source of Truth とする
+
 ## gitignore 対象
 
 - `data/cache/` — 銘柄ごと JSON キャッシュ（TTL 24時間）
