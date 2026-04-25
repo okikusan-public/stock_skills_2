@@ -91,7 +91,10 @@ routine:
     skip_review_when: "strategist がスキップされた場合"
     progressive_output: true # Phase完了ごとに中間結果を出力
     save_to: "data/session_logs/routine/weekly_{date}.json"
-    screener_condition: "strategistが入替/追加/補充を推奨した場合のみ起動"
+    screener_condition: |
+      ターゲット乖離red/exit-rule到達/バリュートラップ疑いがある場合に起動。
+      ⚠️ screenerは情報収集。「やらないチェック」はscreener起動を阻害しない。
+      「やらないチェック」該当時は結果に「📋 WL候補（買い保留）」ラベル付与。
 
 escalation:
   - condition: "再試行上限に達した"
