@@ -41,6 +41,29 @@ class TestCalcRSI:
         assert rsi is not None
         assert 0 <= rsi <= 100
 
+    def test_accepts_pandas_series(self):
+        import pandas as pd
+        closes = pd.Series([100 + i * 0.5 * ((-1) ** i) for i in range(20)])
+        rsi = _calc_rsi(closes)
+        assert rsi is not None
+        assert 0 <= rsi <= 100
+
+    def test_accepts_dataframe_with_close_column(self):
+        import pandas as pd
+        df = pd.DataFrame({
+            "Open": [100.0] * 20,
+            "Close": [100 + i * 0.5 * ((-1) ** i) for i in range(20)],
+            "Volume": [1000] * 20,
+        })
+        rsi = _calc_rsi(df)
+        assert rsi is not None
+        assert 0 <= rsi <= 100
+
+    def test_dataframe_without_close_returns_none(self):
+        import pandas as pd
+        df = pd.DataFrame({"Open": [100.0] * 20})
+        assert _calc_rsi(df) is None
+
 
 # ---------------------------------------------------------------------------
 # detect_alerts
