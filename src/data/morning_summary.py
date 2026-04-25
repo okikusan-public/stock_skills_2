@@ -27,8 +27,19 @@ ALERT_THRESHOLDS = {
 }
 
 
-def _calc_rsi(closes: list[float], period: int = 14) -> float | None:
-    """Calculate RSI(14) from close prices."""
+def _calc_rsi(closes, period: int = 14) -> float | None:
+    """Calculate RSI(14) from close prices.
+
+    Accepts list[float], numpy array, pandas Series, or DataFrame
+    (Close column auto-extracted).
+    """
+    if hasattr(closes, "columns"):
+        if "Close" in closes.columns:
+            closes = closes["Close"].tolist()
+        else:
+            return None
+    elif hasattr(closes, "tolist"):
+        closes = closes.tolist()
     if len(closes) < period + 1:
         return None
     deltas = np.diff(closes[-(period + 1):])
