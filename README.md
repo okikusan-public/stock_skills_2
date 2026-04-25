@@ -51,6 +51,30 @@ export NEO4J_MODE=full  # off/summary/full
 「メモしておいて」        → 投資メモを直接保存
 ```
 
+### 出力フォーマット（Output &amp; Visibility v1）
+
+すべての応答は4レイヤ構成で表示される（KIK-729）。
+
+```
+🎯 [&lt;agent or chain&gt;] &lt;task summary&gt;        ← Layer 1 ヘッダ（常時表示）
+✅ &lt;agent&gt; 完了 (X.Xs) — &lt;1行サマリ&gt;        ← Layer 2 進捗（連鎖時のみ）
+
+[Layer 3 本体: Pattern A/B/Cで切替]
+- Pattern A: ミニマル（VIX/TODO/価格 等の即答）
+- Pattern B: 標準4セクション（単一エージェント分析）
+- Pattern C: チェーン（複数エージェント連鎖・routine）
+
+📊 実行: A → B → C                          ← Layer 4 フッタ（順序固定）
+💾 保存: data/&lt;path&gt;
+🔍 Reviewerでチェック？ [y/skip]
+➡ 次: &lt;次アクション提案&gt;
+```
+
+Reviewer は **3分類で起動制御**:
+- 🔒 **自動**: 売買確定直前 / conviction違反検知 / 週次routine
+- 🔍 **アドホック**: その他strategist/screener等 → 末尾に [y/skip] プロンプト → 次ターンで `y` 入力で起動
+- ⏭ **スキップ**: HC/researcher/analyst/risk-assessor 単独
+
 ## アーキテクチャ
 
 ```

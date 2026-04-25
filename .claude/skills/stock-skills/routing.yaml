@@ -1,5 +1,13 @@
 # Stock Skills Routing — エージェント選択 few-shot
 # 網羅不要。代表パターンがあれば Claude Code が柔軟に判断する。
+#
+# Output & Visibility v1 (KIK-729) フィールド:
+#   pattern: A | B | C  (ない場合は自動判定)
+#     A = ミニマル（1-3行で済む事実照会）
+#     B = 標準（単一エージェント）
+#     C = チェーン（連鎖 ≥2 or progressive or routine）
+#   header: "🎯 [<agent or chain>] <task>" 形式の Layer1 ヘッダ
+#     省略時は `[<agent>] <agent.role>` で自動生成
 
 agents:
   screener:
@@ -45,215 +53,318 @@ agents:
     required_context: []
 
 examples:
-  # --- 単一エージェント ---
+  # --- 単一エージェント (Pattern B) ---
   - intent: "いい株ある？"
     agent: screener
+    pattern: B
+    header: "🎯 [screener] 銘柄探し"
 
   - intent: "米国の高配当株を探して"
     agent: screener
+    pattern: B
+    header: "🎯 [screener] 米国高配当スクリーニング"
 
   - intent: "AI関連の割安株"
     agent: screener
+    pattern: B
+    header: "🎯 [screener] AI関連割安スクリーニング"
 
-  # --- グロース枠スクリーニング（リスク判定連動） ---
+  # --- グロース枠スクリーニング（リスク判定連動・Pattern C） ---
   # risk-on → トレンドフォロー、risk-off → 割安/逆張り、neutral → 見送り
   - intent: "グロース株を探して"
     agents: [risk-assessor, screener]
-    header: "[risk-assessor → screener] リスク判定 → スクリーニング"
+    pattern: C
+    header: "🎯 [risk-assessor → screener] リスク判定 → スクリーニング"
     note: "risk-assessor の判定結果を screener に渡す。normal→mode=momentum+sector_signal、risk-off→スクリーニング見送り（買わない）"
 
   - intent: "トヨタってどう？"
     agent: analyst
+    pattern: B
+    header: "🎯 [analyst] トヨタ(7203.T) 分析"
 
   - intent: "PF大丈夫？"
     agent: health-checker
+    pattern: B
+    header: "🎯 [health-checker] PFヘルスチェック"
 
   - intent: "ストレステストして"
     agent: health-checker
+    pattern: B
+    header: "🎯 [health-checker] ストレステスト"
 
+  # --- Pattern A: ミニマル（1-3行で済む事実照会） ---
   - intent: "VIXは？"
     agent: health-checker
+    pattern: A
+    header: "🎯 [health-checker] VIX確認"
 
   - intent: "TODO見せて"
     agent: health-checker
+    pattern: A
+    header: "🎯 [health-checker] TODOリスト"
 
   - intent: "予定を確認"
     agent: health-checker
+    pattern: A
+    header: "🎯 [health-checker] 予定確認"
 
-  # --- 定常業務: 日次 (KIK-724) ---
+  # --- 定常業務: 日次 (KIK-724・Pattern C) ---
   - intent: "定常業務"
     mode: routine-daily
     agents: [health-checker, researcher]
+    pattern: C
+    header: "🎯 [routine-daily] 日次チェック"
     note: "detect_alerts→HC(PF)→HC(市況)+researcher並列→ターゲット乖離+WLアラート。3-4分"
 
   - intent: "まとめてチェック"
     mode: routine-daily
     agents: [health-checker, researcher]
+    pattern: C
+    header: "🎯 [routine-daily] 日次まとめチェック"
 
   - intent: "日次チェック"
     mode: routine-daily
     agents: [health-checker, researcher]
+    pattern: C
+    header: "🎯 [routine-daily] 日次チェック"
 
   - intent: "ルーティン"
     mode: routine-daily
     agents: [health-checker, researcher]
+    pattern: C
+    header: "🎯 [routine-daily] ルーティン実行"
 
-  # --- 定常業務: 週次 (KIK-724) ---
+  - intent: "おはよう"
+    mode: morning-summary
+    agent: health-checker
+    pattern: A
+    header: "🎯 [morning-summary] 朝サマリー"
+
+  - intent: "朝サマリー"
+    mode: morning-summary
+    agent: health-checker
+    pattern: A
+    header: "🎯 [morning-summary] 朝サマリー"
+
+  # --- 定常業務: 週次 (KIK-724・Pattern C + 自動Reviewer) ---
   - intent: "フルチェック"
     mode: routine-weekly
     agents: [health-checker, researcher, risk-assessor, strategist, screener, reviewer]
+    pattern: C
+    header: "🎯 [routine-weekly] 週次フルチェック"
     review: true
     note: "日次+risk-assessor→strategist→条件付きscreener→reviewer。8-13分"
 
   - intent: "週次レビュー"
     mode: routine-weekly
     agents: [health-checker, researcher, risk-assessor, strategist, screener, reviewer]
+    pattern: C
+    header: "🎯 [routine-weekly] 週次レビュー"
     review: true
 
   - intent: "しっかり見たい"
     mode: routine-weekly
     agents: [health-checker, researcher, risk-assessor, strategist, screener, reviewer]
+    pattern: C
+    header: "🎯 [routine-weekly] 週次レビュー"
     review: true
 
   - intent: "最新ニュース教えて"
     agent: researcher
+    pattern: B
+    header: "🎯 [researcher] 最新ニュース"
 
   - intent: "半導体業界を調べて"
     agent: researcher
+    pattern: B
+    header: "🎯 [researcher] 半導体業界リサーチ"
 
   - intent: "入替提案して"
     agent: strategist
+    pattern: B
+    header: "🎯 [strategist] 入替提案"
     review: true
 
   - intent: "プランモードで"
     agents: [health-checker, analyst, researcher, strategist]
-    header: "[HC → analyst → researcher → strategist] PF確認 → 分析 → リサーチ → 戦略立案"
+    pattern: C
+    header: "🎯 [HC → analyst → researcher → strategist] PF確認 → 分析 → リサーチ → 戦略立案"
     progressive: true
     review: true
 
-  # --- 複数エージェント連鎖 ---
+  # --- 複数エージェント連鎖 (Pattern C) ---
   - intent: "今熱いテーマは？"
     agents: [researcher, screener]
-    header: "[researcher → screener] テーマリサーチ → スクリーニング"
+    pattern: C
+    header: "🎯 [researcher → screener] テーマリサーチ → スクリーニング"
 
   - intent: "リスク判定して"
     agent: risk-assessor
+    pattern: B
+    header: "🎯 [risk-assessor] リスク判定"
 
   - intent: "今はリスクオン？"
     agent: risk-assessor
+    pattern: A
+    header: "🎯 [risk-assessor] リスク状態確認"
 
   - intent: "押し目買いの判定"
     agent: risk-assessor
+    pattern: B
+    header: "🎯 [risk-assessor] 押し目買い判定"
 
   - intent: "市況チェック"
     agents: [health-checker, researcher]
-    header: "[HC + researcher] 市況定量 + ニュース"
+    pattern: C
+    header: "🎯 [HC + researcher] 市況定量 + ニュース"
 
   - intent: "PFを改善したい"
     agents: [health-checker, strategist]
-    header: "[HC → strategist] PF数値確認 → 改善提案"
+    pattern: C
+    header: "🎯 [HC → strategist] PF数値確認 → 改善提案"
     review: true
 
   # --- 売却判断（risk-assessor → health-checker → strategist の3連鎖） ---
   - intent: "この株売るべき？"
     agents: [risk-assessor, health-checker, strategist]
-    header: "[risk → HC → strategist] リスク判定 → 数値確認 → 売却判断"
+    pattern: C
+    header: "🎯 [risk → HC → strategist] リスク判定 → 数値確認 → 売却判断"
     progressive: true
     review: true
     note: "risk-assessorで市場リスク判定→health-checkerで数値事実→strategistでcheck_exit_rule照合+What-If比較"
 
   - intent: "損切りすべき？"
     agents: [risk-assessor, health-checker, strategist]
-    header: "[risk → HC → strategist] リスク判定 → 数値確認 → 損切り判断"
+    pattern: C
+    header: "🎯 [risk → HC → strategist] リスク判定 → 数値確認 → 損切り判断"
     progressive: true
     review: true
 
   - intent: "利確すべき？"
     agents: [risk-assessor, health-checker, strategist]
-    header: "[risk → HC → strategist] リスク判定 → 数値確認 → 利確判断"
+    pattern: C
+    header: "🎯 [risk → HC → strategist] リスク判定 → 数値確認 → 利確判断"
     progressive: true
     review: true
 
   - intent: "リスク確認して代わりを探して"
     agents: [health-checker, screener]
-    header: "[HC → screener] リスク確認 → 代替候補探索"
+    pattern: C
+    header: "🎯 [HC → screener] リスク確認 → 代替候補探索"
     review: true
 
   - intent: "半導体を調べて有望な銘柄を探して"
     agents: [researcher, screener]
-    header: "[researcher → screener] 業界リサーチ → 銘柄探索"
+    pattern: C
+    header: "🎯 [researcher → screener] 業界リサーチ → 銘柄探索"
 
   - intent: "トヨタを調べてメモして"
     agent: analyst
+    pattern: B
+    header: "🎯 [analyst] トヨタ調査+メモ"
 
-  # --- 記録系（エージェント不要、オーケストレーターが直接実行） ---
+  # --- 記録系（エージェント不要、オーケストレーターが直接実行・Pattern A） ---
   - intent: "メモして"
     action: direct
     operation: note_save
+    pattern: A
+    header: "🎯 [direct] メモ保存"
 
   - intent: "学びを記録"
     action: direct
     operation: note_save
+    pattern: A
+    header: "🎯 [direct] 学び記録"
 
   - intent: "テーゼを記録"
     action: direct
     operation: note_save
+    pattern: A
+    header: "🎯 [direct] テーゼ記録"
 
   - intent: "ウォッチリストに入れて"
     action: direct
     operation: watchlist_add
+    pattern: A
+    header: "🎯 [direct] ウォッチリスト追加"
 
   - intent: "ウォッチリスト見せて"
     action: direct
     operation: watchlist_list
+    pattern: A
+    header: "🎯 [direct] ウォッチリスト表示"
 
   - intent: "ウォッチリストから外して"
     action: direct
     operation: watchlist_remove
+    pattern: A
+    header: "🎯 [direct] ウォッチリスト削除"
 
   - intent: "トヨタ100株買った"
     action: direct
     operation: portfolio_buy
+    pattern: A
+    header: "🎯 [direct] PF購入記録"
 
   - intent: "AAPL5株売った"
     action: direct
     operation: portfolio_sell
+    pattern: A
+    header: "🎯 [direct] PF売却記録"
 
   - intent: "メモ一覧"
     action: direct
     operation: note_list
+    pattern: A
+    header: "🎯 [direct] メモ一覧"
 
   - intent: "メモ削除"
     action: direct
     operation: note_delete
+    pattern: A
+    header: "🎯 [direct] メモ削除"
 
   - intent: "現金は○○円"
     action: direct
     operation: cash_update
+    pattern: A
+    header: "🎯 [direct] 現金残高更新"
 
   - intent: "キャッシュ残高"
     action: direct
     operation: cash_update
+    pattern: A
+    header: "🎯 [direct] キャッシュ残高表示"
 
   - intent: "ドルは$○○"
     action: direct
     operation: cash_update
+    pattern: A
+    header: "🎯 [direct] USD残高更新"
 
   - intent: "syncして"
     action: direct
     operation: data_sync
+    pattern: A
+    header: "🎯 [direct] GraphRAG同期"
 
   - intent: "データを同期して"
     action: direct
     operation: data_sync
+    pattern: A
+    header: "🎯 [direct] データ同期"
 
   - intent: "GraphRAGと同期"
     action: direct
     operation: data_sync
+    pattern: A
+    header: "🎯 [direct] GraphRAG同期"
 
   - intent: "データの整合性チェック"
     action: direct
     operation: data_sync
+    pattern: A
+    header: "🎯 [direct] 整合性チェック"
 
 context_rules:
   - 直前の銘柄を省略されたら補完する

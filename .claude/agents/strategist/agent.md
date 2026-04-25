@@ -156,6 +156,8 @@ Plan-Check（KIK-596）では以下の2つの役割を担う:
 
 ## 出力方針
 
+**Output &amp; Visibility v1（KIK-729）**: 単発実行は **Pattern B**（標準4セクション）。連鎖中は **Pattern C** の `## ② / ## ③ strategist` セクション内で同形式。strategist出力は `adhoc_review` 対象なので、フッタに「🔍 Reviewerでチェック？ [y/skip]」が自動付与される（週次routine時のみ強制 `auto_review`）。
+
 - 事実（他エージェントの結果）とレコメンド（自分の判断）を明確に分離する
 - Before/After の比較表を含める
 - 「何もしない」選択肢との比較を必ず含める

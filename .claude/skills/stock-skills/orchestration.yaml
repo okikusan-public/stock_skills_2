@@ -26,18 +26,39 @@ retry_rules:
     max_retry: 0  # リトライ不要、そのまま続行
 
 # ---------------------------------------------------------------------------
-# Reviewer 自動挿入 (KIK-659)
-# 投資判断を伴う出力は必ず Reviewer を通す。意識ベースではなく仕組みで強制する。
+# Reviewer 起動方針 (KIK-659 / KIK-729 で再設計)
+# 3分類: 自動 / アドホック / スキップ
 # ---------------------------------------------------------------------------
 auto_review:
+  # 強制実行のみ（取り返しがつかない or 高リスク）
   trigger:
-    # 以下のいずれかに該当 → Reviewer を自動挿入
-    - agent_includes: strategist
-    - agent_includes: screener    # スクリーニング結果も投資判断の入口
+    - context: pre_trade_confirmation     # buy/sell --yes 直前
+    - context: conviction_violation       # 売却提案中に conviction 銘柄が含まれる
+    - context: routine_weekly_strategist  # 週次routineのstrategist出力
+  action: append_reviewer
+  skip_condition: reviewer_already_executed  # 二重実行防止
+
+adhoc_review:
+  # 出力後に [y/skip] プロンプトを出し、次ターンでユーザーが y → Reviewer起動
+  trigger:
+    - agent_includes: strategist          # 単発strategist
+    - agent_includes: screener            # 単発screener（投資判断の入口）
     - routing_flag: "review: true"
     - output_contains: [売却, 購入, 入替, リバランス, 売るべき, 買うべき, 乗り換え, スワップ]
-  action: append_reviewer
-  skip_condition: reviewer_already_executed  # 二重実行を防止
+  action: append_review_prompt
+  prompt: "🔍 Reviewerでチェック？ [y/skip]"
+  user_approval_keywords: [y, yes, "レビューして", "チェックして", "review"]
+  skip_when:
+    - context: auto_review_already_triggered
+    - context: reviewer_already_executed
+
+skip_review:
+  # 完全スキップ（事実出しのみ・連鎖なし単独）
+  trigger:
+    - agent_only: health-checker
+    - agent_only: researcher
+    - agent_only: analyst
+    - agent_only: risk-assessor
 
 # ---------------------------------------------------------------------------
 # Reviewer FAIL 時のリトライ方針 (KIK-671)
@@ -95,6 +116,40 @@ routine:
       ターゲット乖離red/exit-rule到達/バリュートラップ疑いがある場合に起動。
       ⚠️ screenerは情報収集。「やらないチェック」はscreener起動を阻害しない。
       「やらないチェック」該当時は結果に「📋 WL候補（買い保留）」ラベル付与。
+
+# ---------------------------------------------------------------------------
+# Output & Visibility v1 (KIK-729)
+# 4レイヤ構成（ヘッダ/進捗/本体/フッタ）の適用ルール
+# ---------------------------------------------------------------------------
+visualization:
+  layer1_header:
+    always_on: true              # Pattern A含む全パターンでLayer1ヘッダを必ず出す
+    source_priority:
+      - routing_yaml_header      # routing.yaml の `header` フィールド優先
+      - auto_generate            # なければ `[<agent>] <agent.role>` で自動生成
+    format: "🎯 [<agent or chain>] <task summary>"
+
+  layer2_progress:
+    apply_when:
+      - flag: "progressive: true"
+      - condition: "agents.length >= 2"
+      - mode_match: "routine-*"
+    format: "✅ <agent_name> 完了 (X.Xs) — <1行サマリ>"
+
+  layer3_pattern:
+    selection:
+      - explicit: "routing.yaml の `pattern` フィールド (A|B|C)"
+      - auto_b: "agents.length == 1 (単一エージェント) → Pattern B"
+      - auto_c: "agents.length >= 2 or progressive: true or mode: routine-* → Pattern C"
+      - require_a_explicit: true  # Pattern A は必ず明示指定
+
+  layer4_footer:
+    order:
+      - "📊 実行: <agent chain>"
+      - "💾 保存: <data path>"
+      - "🔍 Reviewerでチェック？ [y/skip]"  # adhoc_review対象時のみ
+      - "➡ 次: <next action suggestion>"
+    skippable: true  # 不要な行はスキップ可。出す場合は順序固定
 
 escalation:
   - condition: "再試行上限に達した"
