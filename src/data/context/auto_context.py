@@ -15,6 +15,10 @@ from typing import Optional
 from src.data.ticker_utils import extract_symbol
 from src.data import graph_store, graph_query
 from src.data import note_manager
+from src.data.context.fallback_context import (
+    build_symbol_context_local,
+    build_portfolio_context_local,
+)
 
 # ---------------------------------------------------------------------------
 # Sub-module imports (KIK-577)
@@ -368,36 +372,40 @@ def get_context(user_input: str) -> Optional[dict]:
 
     # Portfolio query (no specific symbol)
     if _is_portfolio_query(user_input):
-        mc = graph_query.get_recent_market_context()
-        ctx_lines = ["## ポートフォリオコンテキスト"]
-        if mc:
-            ctx_lines.append(f"- 直近市況: {mc.get('date', '?')}")
+        # KIK-719: Use Neo4j when available, otherwise build from local data/
+        if graph_store.is_available():
+            mc = graph_query.get_recent_market_context()
+            ctx_lines = ["## ポートフォリオコンテキスト"]
+            if mc:
+                ctx_lines.append(f"- 直近市況: {mc.get('date', '?')}")
 
-        # KIK-563: 1-hop traversal for holdings notes
-        try:
-            from src.data.graph_query.portfolio import get_holdings_notes
-            notes = get_holdings_notes()
-            if notes:
-                ctx_lines.append("")
-                ctx_lines.append("## 保有銘柄の重要メモ")
-                for n in notes:
-                    sym = n.get("symbol", "?")
-                    ntype = n.get("type", "?")
-                    content = (n.get("content", "") or "")[:60]
-                    ndate = n.get("date", "")
-                    date_part = f" ({ndate})" if ndate else ""
-                    ctx_lines.append(f"- [{sym}] {ntype}: {content}{date_part}")
-        except Exception:
-            pass  # graceful degradation
+            # KIK-563: 1-hop traversal for holdings notes
+            try:
+                from src.data.graph_query.portfolio import get_holdings_notes
+                notes = get_holdings_notes()
+                if notes:
+                    ctx_lines.append("")
+                    ctx_lines.append("## 保有銘柄の重要メモ")
+                    for n in notes:
+                        sym = n.get("symbol", "?")
+                        ntype = n.get("type", "?")
+                        content = (n.get("content", "") or "")[:60]
+                        ndate = n.get("date", "")
+                        date_part = f" ({ndate})" if ndate else ""
+                        ctx_lines.append(f"- [{sym}] {ntype}: {content}{date_part}")
+            except Exception:
+                pass  # graceful degradation
 
-        ctx_lines.append("\n**推奨**: health (ポートフォリオ診断)")
-        pf_ctx = {
-            "symbol": "",
-            "context_markdown": "\n".join(ctx_lines),
-            "recommended_skill": "health",
-            "recommendation_reason": "ポートフォリオ照会",
-            "relationship": "PF",
-        }
+            ctx_lines.append("\n**推奨**: health (ポートフォリオ診断)")
+            pf_ctx = {
+                "symbol": "",
+                "context_markdown": "\n".join(ctx_lines),
+                "recommended_skill": "health",
+                "recommendation_reason": "ポートフォリオ照会",
+                "relationship": "PF",
+            }
+        else:
+            pf_ctx = build_portfolio_context_local()
         result = _merge_context(pf_ctx, vector_results) or pf_ctx
         return _append_lessons(result, user_input=user_input)
 
@@ -405,21 +413,28 @@ def get_context(user_input: str) -> Optional[dict]:
     symbol = _resolve_symbol(user_input)
     symbol_context = None
 
-    if symbol and graph_store.is_available():
-        history = graph_store.get_stock_history(symbol)
-        is_bookmarked = _check_bookmarked(symbol)
-        # KIK-414: HOLDS relationship for authoritative held-stock detection
-        held = graph_store.is_held(symbol)
-        skill, reason, relationship = _recommend_skill(history, is_bookmarked,
-                                                       is_held=held)
-        context_md = _format_context(symbol, history, skill, reason, relationship)
-        symbol_context = {
-            "symbol": symbol,
-            "context_markdown": context_md,
-            "recommended_skill": skill,
-            "recommendation_reason": reason,
-            "relationship": relationship,
-        }
+    if symbol:
+        if graph_store.is_available():
+            history = graph_store.get_stock_history(symbol)
+            is_bookmarked = _check_bookmarked(symbol)
+            # KIK-414: HOLDS relationship for authoritative held-stock detection
+            held = graph_store.is_held(symbol)
+            skill, reason, relationship = _recommend_skill(
+                history, is_bookmarked, is_held=held,
+            )
+            context_md = _format_context(
+                symbol, history, skill, reason, relationship,
+            )
+            symbol_context = {
+                "symbol": symbol,
+                "context_markdown": context_md,
+                "recommended_skill": skill,
+                "recommendation_reason": reason,
+                "relationship": relationship,
+            }
+        else:
+            # KIK-719: Neo4j-free fallback from data/notes + portfolio.csv
+            symbol_context = build_symbol_context_local(symbol)
 
     # KIK-420: Merge symbol context + vector results
     merged = _merge_context(symbol_context, vector_results)

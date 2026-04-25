@@ -111,7 +111,7 @@ Data (src/data/) — yahoo_client, grok_client, graph_store, graph_query, common
 docker compose up -d
 ```
 
-Neo4j 未接続でも全機能が正常動作する（graceful degradation）。
+**新規利用は data/ ローカルストレージで完結します。Neo4j はオプション機能です。** 既に Neo4j を運用中の方はそのまま使い続けられます（graceful degradation 完全対応）。Neo4j 未接続時は `data/notes/`・`data/portfolio.csv`・`data/screening_results/` 等から自動コンテキスト注入が動作します（KIK-719）。
 
 ## テスト
 

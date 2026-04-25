@@ -733,17 +733,23 @@ class TestGetContext:
             result = get_context("今日はいい天気だ")
         assert result is None
 
+    @patch("src.data.context.auto_context.build_symbol_context_local",
+           return_value=None)
     @patch("src.data.context.auto_context._vector_search", return_value=[])
     @patch("src.data.context.auto_context._check_bookmarked")
     @patch("src.data.context.auto_context.graph_store")
-    def test_neo4j_unavailable(self, mock_gs, mock_bookmark, mock_vs):
-        """Neo4j 未接続 → None"""
+    def test_neo4j_unavailable(self, mock_gs, mock_bookmark, mock_vs,
+                                mock_local):
+        """Neo4j 未接続時はローカル data/ にフォールバック (KIK-719)。
+        ここではローカルにも情報がないケースで None を返すことを確認。"""
         mock_gs._get_driver.return_value = None  # for _resolve_symbol
         mock_gs.is_available.return_value = False
 
         result = get_context("7203.Tってどう？")
-        # _extract_symbol finds the ticker, but is_available returns False
+        # ローカルフォールバックも空 → None
         assert result is None
+        # フォールバック関数が呼ばれたことを確認
+        mock_local.assert_called_once_with("7203.T")
 
     @patch("src.data.context.auto_context._check_bookmarked")
     @patch("src.data.context.auto_context.graph_store")
@@ -1205,9 +1211,14 @@ class TestGetContextWithLessons:
 
     @patch("src.data.context.auto_context._load_lessons", return_value=[])
     @patch("src.data.graph_query.portfolio.get_holdings_notes")
+    @patch("src.data.context.auto_context.graph_store")
     @patch("src.data.context.auto_context.graph_query")
-    def test_pf_query_shows_holdings_notes(self, mock_gq, mock_notes, mock_les):
-        """PFクエリで保有銘柄のNote(observation/concern/target)が表示される (KIK-563)."""
+    def test_pf_query_shows_holdings_notes(self, mock_gq, mock_gs, mock_notes,
+                                            mock_les):
+        """PFクエリで保有銘柄のNote(observation/concern/target)が表示される (KIK-563).
+
+        Neo4j 接続中の経路をテスト (KIK-719)。"""
+        mock_gs.is_available.return_value = True
         mock_gq.get_recent_market_context.return_value = {"date": "2026-03-20"}
         mock_notes.return_value = [
             {"symbol": "NFLX", "type": "observation",
@@ -1225,9 +1236,12 @@ class TestGetContextWithLessons:
 
     @patch("src.data.context.auto_context._load_lessons", return_value=[])
     @patch("src.data.graph_query.portfolio.get_holdings_notes")
+    @patch("src.data.context.auto_context.graph_store")
     @patch("src.data.context.auto_context.graph_query")
-    def test_pf_query_no_notes_no_section(self, mock_gq, mock_notes, mock_les):
-        """保有銘柄にメモがない → セクション非表示."""
+    def test_pf_query_no_notes_no_section(self, mock_gq, mock_gs, mock_notes,
+                                           mock_les):
+        """保有銘柄にメモがない → セクション非表示 (Neo4j 接続中)."""
+        mock_gs.is_available.return_value = True
         mock_gq.get_recent_market_context.return_value = None
         mock_notes.return_value = []
         result = get_context("PFチェック")
@@ -1235,10 +1249,14 @@ class TestGetContextWithLessons:
         assert "## 保有銘柄の重要メモ" not in result["context_markdown"]
 
     @patch("src.data.context.auto_context._load_lessons", return_value=[])
-    @patch("src.data.graph_query.portfolio.get_holdings_notes", side_effect=Exception("fail"))
+    @patch("src.data.graph_query.portfolio.get_holdings_notes",
+           side_effect=Exception("fail"))
+    @patch("src.data.context.auto_context.graph_store")
     @patch("src.data.context.auto_context.graph_query")
-    def test_pf_query_notes_error_graceful(self, mock_gq, mock_notes, mock_les):
-        """Neo4j未接続時 → graceful degradation（メモセクションなし）."""
+    def test_pf_query_notes_error_graceful(self, mock_gq, mock_gs, mock_notes,
+                                            mock_les):
+        """Neo4j 接続中だが get_holdings_notes 失敗 → graceful degradation."""
+        mock_gs.is_available.return_value = True
         mock_gq.get_recent_market_context.return_value = None
         result = get_context("PF ヘルスチェック")
         assert result is not None

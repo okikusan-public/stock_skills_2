@@ -1,5 +1,9 @@
 # Neo4j Knowledge Graph Schema
 
+> **ℹ️ Neo4j はオプション機能です（KIK-719）**
+> 新規利用は `data/` ローカルストレージで完結します。Neo4j は既存ユーザー向けにサポート継続します。
+> Neo4j 未接続時は `src/data/context/fallback_context.py` がローカルファイル（notes/portfolio/screening_results）から自動コンテキストを組み立てます。
+
 投資ナレッジグラフのスキーマリファレンス。`src/data/graph_store/` が定義・管理する。
 
 ---
