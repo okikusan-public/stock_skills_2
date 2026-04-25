@@ -34,6 +34,20 @@ pip install -r requirements.txt
 
 エージェントが自律的にツールを呼び出すため、ユーザーがスクリプトを直接実行する必要はない。
 
+## Output &amp; Visibility v1（KIK-729）
+
+すべてのエージェント出力は4レイヤ構成で生成される。詳細は `.claude/skills/stock-skills/SKILL.md` の「Output &amp; Visibility v1」セクション参照。
+
+- **Layer 1**: ヘッダ（実行前・常時ON）`🎯 [&lt;agent or chain&gt;] &lt;task&gt;`
+- **Layer 2**: 進捗（連鎖時のみ）`✅ &lt;agent&gt; 完了 (X.Xs) — &lt;サマリ&gt;`
+- **Layer 3**: 本体（Pattern A/B/Cで切替）
+  - A: ミニマル（1-3行で済む事実照会）
+  - B: 標準（単一エージェント・4セクション固定）
+  - C: チェーン（連鎖 ≥2 / routine）
+- **Layer 4**: フッタ（順序固定）`📊 実行 → 💾 保存 → 🔍 Reviewer? → ➡ 次`
+
+Reviewer は3分類で起動: 🔒 自動（売買確定/conviction違反/週次routine） / 🔍 アドホック（[y/skip]プロンプト） / ⏭ スキップ。
+
 ## Architecture
 
 詳細は [docs/architecture.md](docs/architecture.md)、[docs/neo4j-schema.md](docs/neo4j-schema.md) を参照。

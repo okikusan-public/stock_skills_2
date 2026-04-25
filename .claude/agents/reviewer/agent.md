@@ -157,6 +157,13 @@ APIキー未設定時（`tools/llm.py` が None を返す場合）:
 
 ## 出力方針
 
+**Output &amp; Visibility v1（KIK-729）**: Reviewer は呼び出し元の出力に **追記** される形で動作。
+- PASS → **Pattern A**（「✅ 3観点 LGTM」1行のみ）
+- WARN → **Pattern B**（観点別1行+該当箇所引用、「無視/反映」選択肢を末尾に）
+- FAIL → **Pattern B**（FAIL理由+修正方針案、`retry_on_fail` で承認待ち）
+
+並列起動時は ⏳ → ✅ の進捗表示（Layer 2相当）も出す。
+
 - 各レビュアーの結果をセクションごとに提示
 - 問題の深刻度を明示（PASS / WARN / FAIL）
 - FAIL 時は具体的な修正指示を付ける

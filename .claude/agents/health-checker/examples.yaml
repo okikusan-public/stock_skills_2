@@ -1,5 +1,9 @@
 # Health Checker Agent — Few-shot Examples
 # 数値はサンプル。事実・数値を出すだけ。判断・レコメンドはしない。
+#
+# Output & Visibility v1（KIK-729）:
+#   - Layer1ヘッダ（🎯 [agent] task）はオーケストレーター側で起動前に付与される
+#   - 各 example の output は Layer3 本体のみ記述する（ヘッダは含めない）
 
 examples:
   # === 朝サマリー (KIK-717) ===
