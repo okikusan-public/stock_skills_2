@@ -6,7 +6,7 @@ reviewers:
   risk_reviewer:
     role: "リスク・見落とし・反論"
     provider: gpt
-    model: gpt-5.4
+    model: gpt-5.5
   logic_reviewer:
     role: "矛盾・論理整合性・lesson との整合"
     provider: gemini
@@ -44,7 +44,7 @@ available_models:
   gpt:
     api_key_env: OPENAI_API_KEY
     models:
-      - model: gpt-5.4
+      - model: gpt-5.5
         cost: { input_per_m: 2.50, output_per_m: 15.00 }
   grok:
     api_key_env: XAI_API_KEY
