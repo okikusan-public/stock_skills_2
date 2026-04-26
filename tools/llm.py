@@ -156,6 +156,20 @@ def get_available_providers() -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# KIK-731: Gemini Deep Research re-export
+# ---------------------------------------------------------------------------
+
+try:
+    from src.data.gemini_client import (  # noqa: E402
+        gemini_deep_research,
+        is_deep_research_enabled,
+    )
+    HAS_GEMINI_DR = True
+except ImportError:
+    HAS_GEMINI_DR = False
+
+
+# ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
 

@@ -26,6 +26,24 @@ tools:
       search_x_sentiment:
         description: "X(旧Twitter)上の投資家センチメント取得"
         when: "候補の定性評価時、市場心理の確認時"
+      bulk_x_search:
+        provider: "xAI Grok"
+        description: "X firehose 並列センチメント（複数クエリ束ね）"
+        when: "投資家センチメント・$cashtag・特定 handle を複数横断する時"
+        strength: "X firehose 独占アクセス（他LLM不可）"
+        not_for: "公式メディア・SEC（→ gemini.deep_research を使う）"
+        cost_per_call_usd: 0.5
+        max_calls_per_session: 5
+        note: "1クエリあたり sleep(0.5) で rate limit 配慮。max_sources_per_call=10 で sources 課金抑制"
+      bulk_web_search:
+        provider: "xAI Grok"
+        description: "Grok web_search 並列（速報重視・サイトフィルタ可）"
+        when: "リアルタイム速報・X反応とWeb反応の対比"
+        strength: "Grok の reasoning + web_search 統合"
+        not_for: "深い徹底調査（→ gemini.deep_research）"
+        cost_per_call_usd: 0.5
+        max_calls_per_session: 3
+        note: "allowed_domains で site フィルタ可（最大5）"
 
   graphrag:
     source: tools/graphrag.py
@@ -47,6 +65,18 @@ tools:
       is_provider_available:
         description: "指定プロバイダのAPIキーが設定されているか確認"
         when: "LLM呼び出し前のチェック"
+      gemini_deep_research:
+        provider: "Google Gemini"
+        description: "Gemini Deep Research API: Web 全般を自律巡回（80-160 sources）+ 引用付きレポート生成"
+        when: "業界全体像・規制動向・公式IR・SEC・マクロを徹底調査する時"
+        strength: "Google Search Grounding。1タスクで多数ソースを統合した深い分析"
+        not_for: "X/Twitter内データ（→ grok.bulk_x_search）"
+        cost_per_call_usd: 2.5
+        max_calls_per_session: 2
+        note: "depth=light/medium/heavy。wall_time 30min ハードキャンセル。DEEPTHINK_DR_ENABLED=off で停止"
+      is_deep_research_enabled:
+        description: "Gemini DR の kill switch 状態確認 (DEEPTHINK_DR_ENABLED)"
+        when: "DR 起動前のチェック"
 
   notes:
     source: tools/notes.py

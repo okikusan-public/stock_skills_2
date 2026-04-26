@@ -261,8 +261,37 @@ Swarm 割当: [テーマ名]
 | **反証・リスク分析** | GPT(reasoning='high') | 批判的思考・深い推論（ソフト制約: 最適） |
 | **lesson照合・長文分析** | Gemini-Pro | 1Mコンテキスト（ソフト制約: 最適） |
 | **PF整合性・統合判断** | Claude（自身） | PF文脈保持・オーケストレーション |
+| **徹底調査（業界網羅）** | Gemini Deep Research | 80-160 sources 自律巡回 + 引用付き（KIK-731） |
+| **複数銘柄/テーマ並列** | Grok bulk_x / bulk_web | X firehose 並列・速報並列（KIK-732） |
 
 **⚠️ ハード制約（物理的に不可能）を先に固定し、ソフト制約（得意不得意）で推論役割を割り当てる。**
+
+#### Deep Research / Bulk Search トリガー (KIK-731 / KIK-732)
+
+ユーザーが「**深く**」「**徹底的に**」「**DR で**」「**腰を据えて**」と発話、
+または分析対象が >5銘柄 / >3テーマ横断の場合、Step 3 で以下を提案する:
+
+```
+🔍 Deep Research を起動できます
+   ・gemini.deep_research: Web 徹底調査（80-160 sources、推定 $2.5、5-10分）
+     → 業界全体像・規制動向・SEC等
+   ・grok.bulk_x_search: X並列センチメント（推定 $0.5-2.5、~30秒）
+     → 投資家センチメント・$cashtag・速報
+   実行しますか？ [y/skip]
+```
+
+ユーザー `y` で実行。完了後、Layer 4 フッタに記録:
+```
+💰 cost=$X.XX | 📚 sources=N | ⏱ duration=Xs
+```
+
+`config/tools.yaml` の `provider` / `when` / `strength` / `not_for` で**用途を区別**:
+- Web網羅 → `gemini.deep_research`（Google Search Grounding）
+- X内データ → `grok.bulk_x_search`（X firehose 独占）
+- 速報並列 → `grok.bulk_web_search`
+
+ハード制約: `deepthink_limits.yaml` の `tool_limits` セクション（DR 月10回/$30、bulk 月20回/$10、合算 $50）。
+`DEEPTHINK_DR_ENABLED=off` で DR 即停止。
 
 ### Step 4: チェックポイント（報告のみ — 承認待ちではない）
 

@@ -32,6 +32,11 @@ try:
         # テキスト合成
         synthesize_text,
     )
+    # KIK-732: bulk search 並列ラッパー (DeepThink Step 3 用)
+    from src.data.grok_client.bulk_search import (  # noqa: E402
+        bulk_x_search,
+        bulk_web_search,
+    )
     HAS_GROK = True
 except ImportError:
     HAS_GROK = False
@@ -53,6 +58,9 @@ __all__ = [
     "search_business",
     # テキスト合成
     "synthesize_text",
+    # KIK-732: bulk 並列
+    "bulk_x_search",
+    "bulk_web_search",
     # フラグ
     "HAS_GROK",
 ]
