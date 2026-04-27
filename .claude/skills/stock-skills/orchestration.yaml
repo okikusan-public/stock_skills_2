@@ -35,6 +35,7 @@ auto_review:
     - context: pre_trade_confirmation     # buy/sell --yes 直前
     - context: conviction_violation       # 売却提案中に conviction 銘柄が含まれる
     - context: routine_weekly_strategist  # 週次routineのstrategist出力
+    - context: lesson_citation_zero       # KIK-738: lesson 引用 0 件で提案出力時
   action: append_reviewer
   skip_condition: reviewer_already_executed  # 二重実行防止
 

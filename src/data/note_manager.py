@@ -412,6 +412,82 @@ def _parse_threshold(value: str) -> Optional[float]:
         return None
 
 
+def update_lesson_metadata(
+    note_id: str,
+    *,
+    trigger: Optional[str] = None,
+    expected_action: Optional[str] = None,
+    key_kpis: Optional[list] = None,
+    base_dir: str = _NOTES_DIR,
+) -> Optional[dict]:
+    """Update structured metadata fields on an existing lesson note (KIK-738).
+
+    Only `trigger` / `expected_action` / `key_kpis` are modifiable here.
+    Other fields (content, date, symbol, etc.) are preserved as master truth.
+    Returns the updated note dict, or None if not found.
+
+    Pass None for a field to leave it unchanged. Pass an empty string/list to
+    explicitly clear it (rarely useful — usually you want to add).
+    """
+    d = Path(base_dir)
+    if not d.exists():
+        return None
+
+    updated = None
+    for fp in d.glob("*.json"):
+        try:
+            with open(fp, encoding="utf-8") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+        notes = data if isinstance(data, list) else [data]
+        modified = False
+        for n in notes:
+            if not isinstance(n, dict) or n.get("id") != note_id:
+                continue
+            if n.get("type") != "lesson":
+                # Only lesson notes have these structured metadata fields
+                return None
+            if trigger is not None:
+                n["trigger"] = trigger
+            if expected_action is not None:
+                n["expected_action"] = expected_action
+            if key_kpis is not None:
+                n["key_kpis"] = list(key_kpis)
+            updated = n
+            modified = True
+            break
+        if modified:
+            payload = notes if isinstance(data, list) else notes[0]
+            try:
+                with open(fp, "w", encoding="utf-8") as f:
+                    json.dump(payload, f, ensure_ascii=False, indent=2)
+            except OSError:
+                return None
+            break
+
+    # Best-effort Neo4j sync (graceful degradation)
+    if updated is not None:
+        try:
+            from src.data.graph_store import _get_mode, _get_driver
+            if _get_mode() != "off":
+                driver = _get_driver()
+                if driver is not None:
+                    driver.execute_query(
+                        "MATCH (n:Note {id: $nid}) "
+                        "SET n.trigger = $trig, n.expected_action = $action, n.key_kpis = $kpis",
+                        nid=note_id,
+                        trig=updated.get("trigger") or "",
+                        action=updated.get("expected_action") or "",
+                        kpis=updated.get("key_kpis") or [],
+                        database_="neo4j",
+                    )
+        except Exception:
+            pass
+
+    return updated
+
+
 def delete_note(
     note_id: str,
     base_dir: str = _NOTES_DIR,

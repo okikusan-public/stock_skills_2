@@ -86,18 +86,34 @@ if not result["passed"]:
 
 ### Step 1: 初回分析
 
-**まず lesson + 対象銘柄の thesis/observation をロードする（必須）:**
+**⚠️ MUST (KIK-738): lesson は全件 load した上で `filter_relevant_lessons()` でテーマ関連分のみ抽出する。**
+全件素読みは形骸化を招く（2026-04-27 / 2026-04-28 事故の真因）。テーマに関連する lesson のみ
+明示的に絞り込み、その内容を以降の全ステップで参照する。
 
 ```python
 python3 -c "
 import sys; sys.path.insert(0, '.')
 from tools.notes import load_notes
+from src.data.lesson_enforcer import filter_relevant_lessons
 
-# 1. Lesson（全件）
-lessons = load_notes(note_type='lesson')
-print(f'=== Lessons ({len(lessons)}件) ===')
-for n in lessons:
-    print(f'[{n.get(\"date\",\"\")}] {n.get(\"content\",\"\")[:200]}')
+# 1. Lesson 全件 load → ユーザー意図に関連するもののみ抽出（KIK-738 hook）
+all_lessons = load_notes(note_type='lesson')
+user_input = '<USER_PROMPT_HERE>'  # ユーザーの今回の指示文
+relevant_lessons = filter_relevant_lessons(user_input, all_lessons)
+
+print(f'=== Lessons {len(relevant_lessons)}/{len(all_lessons)} relevant ===')
+for n in relevant_lessons:
+    print(f'[{n.get(\"date\",\"\")}] trigger={n.get(\"trigger\",\"(none)\")[:60]}')
+    print(f'  expected_action: {n.get(\"expected_action\",\"(none)\")[:100]}')
+
+# 関連 0 件の場合の fallback 戦略：
+#   (a) 該当 lesson の trigger フィールドが未バックフィル → 直近 10 件で代用
+#   (b) ユーザー入力が真に新規パターン (どの trigger とも一致しない)
+# どちらの場合も直近 10 件にフォールバック。バックフィル完了後 (KIK-738 Phase 2)
+# 関連 0 件は (b) を意味するようになる。
+if not relevant_lessons:
+    print('[fallback] no trigger-match → recent 10 of', len(all_lessons))
+    relevant_lessons = all_lessons[-10:]
 
 # 2. 対象銘柄の thesis/observation（KIK-695）
 import csv
@@ -114,7 +130,8 @@ for sym in symbols:
 "
 ```
 
-lesson + 戦略メモのロード結果を以降の全ステップで参照する。0 件でも実行は続行する。
+`relevant_lessons` を以降の全ステップで参照する。Step 5 の verify_lesson_cited で
+**この同じリスト**を引用検証に渡す（一貫性保証）。
 
 次に stock-skills のエージェント（Screener / Analyst / Health Checker / Researcher / Strategist）を起動。使用可能なエージェントは [stock-skills routing.yaml](../stock-skills/routing.yaml) を参照。
 
@@ -339,6 +356,64 @@ if not result["passed"]:
     # conviction 違反 / lot_size 不正 → 推奨を出力前に修正
     raise SystemExit(f"Preflight failed at Step 5: {result['violations']}")
 ```
+
+**⚠️ MUST (KIK-738): Step 1 で抽出した `relevant_lessons` を最終提案文で**逐語引用**しているか検証。**
+
+引用ゼロは「lesson 形骸化」の典型パターン (2026-04-27 撤回ログ / 2026-04-28 META 推奨ミス)。
+Step 5 出力前に必ず以下を実行し、lesson が引用されていなければ提案を**書き直す**：
+
+```python
+from src.data.lesson_enforcer import verify_lesson_cited
+
+final_proposal_text = "<エグゼクティブサマリー + Swarm 統合 + 詳細 の本文>"
+ok, missing_lesson_ids = verify_lesson_cited(final_proposal_text, relevant_lessons)
+if not ok:
+    # missing_lesson_ids の lesson から expected_action / key_kpis を抜き出して、
+    # エグゼクティブサマリー本文に組み込んで再生成。
+    raise SystemExit(
+        f"Step 5 lesson citation failed: {missing_lesson_ids} are not cited in proposal. "
+        "提案テキストに該当 lesson の expected_action/key_kpis を逐語引用してから再出力すること。"
+    )
+```
+
+加えて、**Deep Research / bulk_search を実行した場合は、DR の "不採用" 銘柄リストが**
+**最終提案に混入していないか cross-check**：
+
+```python
+import re
+
+# DR レポート本文 (Step 3 で取得した text) から不採用銘柄を動的抽出。
+# 規則: 「見送り」「不採用」「除外」「除く」「リジェクト」を含むセクション内の
+# ティッカー風トークン (大文字 2-5 文字 or 4桁.T/.Tの日本株コード) を拾う。
+def _extract_dr_rejected(dr_text: str) -> list[str]:
+    if not dr_text:
+        return []
+    pattern = r"(?:見送り|不採用|除外|除く|リジェクト|reject)[^\n]{0,400}"
+    rejected: set[str] = set()
+    for match in re.finditer(pattern, dr_text):
+        sect = match.group(0)
+        for sym in re.findall(r"\b([A-Z]{2,5}|\d{4}\.T)\b", sect):
+            rejected.add(sym)
+    return sorted(rejected)
+
+dr_text = "<Step 3 で取得した DR 本文 (出力テキスト全体)>"
+dr_rejected = _extract_dr_rejected(dr_text)  # 例: ["META", "VST", "TSM"]
+for sym in dr_rejected:
+    # plan に登場するが「DR 不採用」「DR rejected」のような明示的な逆論証も同時に
+    # 含まれていなければ abort
+    if sym in final_proposal_text and not re.search(
+        rf"{sym}.{{0,80}}(不採用|rejected|見送り)", final_proposal_text
+    ):
+        raise SystemExit(
+            f"DR cross-check failed: '{sym}' is in DR rejected list but is "
+            "referenced in the proposal without explicit rejection rationale. "
+            "DR で不採用判定された銘柄を組み入れるなら、その逆論拠を明示すること。"
+        )
+```
+
+`_extract_dr_rejected()` は DR レポートのフォーマットに依存する best-effort 抽出。
+DR が新フォーマットになったら正規表現を拡張すること。テストは
+`tests/data/test_lesson_enforcer.py::TestStep5HookScenarios` に整合パターンあり。
 
 **エグゼクティブサマリー先行の3部構成（サマリー、議論の統合、詳細）で出力する。**
 

@@ -46,11 +46,26 @@ Neo4j 未接続等で `get_context()` が None を返した場合、`tools/notes
 python3 -c "
 import sys; sys.path.insert(0, '.')
 from tools.notes import load_notes
-lessons = load_notes(note_type='lesson')
-for n in lessons:
-    print(f'[{n[\"date\"]}] {n[\"content\"][:200]}')
+from src.data.lesson_enforcer import filter_relevant_lessons, verify_lesson_cited
+
+# KIK-738: lesson は filter_relevant_lessons で関連抽出
+all_lessons = load_notes(note_type='lesson')
+target_text = '<レビュー対象の出力テキスト>'  # Strategist 等の提案文
+relevant = filter_relevant_lessons(target_text, all_lessons)
+print(f'relevant lessons: {len(relevant)}/{len(all_lessons)}')
+for n in relevant:
+    print(f'[{n[\"date\"]}] trigger={n.get(\"trigger\",\"(none)\")[:60]}')
     print('---')
 "
+```
+
+**⚠️ MUST (KIK-738): レビュー対象テキストが lesson を引用しているか必ず検証する。**
+引用 0 件は WARN として明記し、整合性レビュアーが必ずチェックする：
+
+```python
+ok, missing = verify_lesson_cited(target_text, relevant)
+if not ok:
+    print(f'WARN: lesson 未引用 ({missing}) - 整合性レビュアーが必ず検証')
 ```
 
 lesson が 0 件でない限り、レビューは必ず lesson を参照して実施する。

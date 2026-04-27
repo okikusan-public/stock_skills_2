@@ -118,3 +118,63 @@ class TestVerifyLessonCited:
         ok, missing = verify_lesson_cited("anything", [])
         assert ok is True
         assert missing == []
+
+
+# ---------------------------------------------------------------------------
+# KIK-738 hook integration scenarios
+# Simulate the DeepThink Step 5 verification flow.
+# ---------------------------------------------------------------------------
+
+
+class TestStep5HookScenarios:
+    """Simulate META-style mistakes — proposal references a stock that
+    a lesson explicitly tells us to avoid, but never quotes the lesson's
+    expected_action. verify_lesson_cited must catch this."""
+
+    def test_meta_style_uncited_lesson_fails(self):
+        lessons = [{
+            "id": "L_DR_CHERRY_PICK",
+            "trigger": "Deep Research 結果を踏まえた提案を作成する場面",
+            "expected_action": "DR 不採用銘柄を plan に混入させない",
+            "key_kpis": ["DR 不採用リスト", "cross-check"],
+        }]
+        # Plan mentions META but never quotes the lesson rule
+        proposal = "推奨アクション: META +2株 を新規組入する。理由は割安"
+        ok, missing = verify_lesson_cited(proposal, lessons)
+        assert ok is False
+        assert missing == ["L_DR_CHERRY_PICK"]
+
+    def test_proper_citation_passes(self):
+        lessons = [{
+            "id": "L_ATH",
+            "trigger": "新規買付候補を提案する場面",
+            "expected_action": "52H からの距離を必ず確認",
+            "key_kpis": ["52週高値からの距離"],
+        }]
+        proposal = (
+            "推奨: AVGO は 52H からの距離 0.0% で ATH 接近。"
+            "52H からの距離を必ず確認した結果、試し玉サイズに縮小"
+        )
+        ok, missing = verify_lesson_cited(proposal, lessons)
+        assert ok is True
+
+    def test_filter_then_verify_pipeline(self):
+        """Simulates Step 1 (filter) → Step 5 (verify) full pipeline.
+
+        trigger は filter 用にスラッシュ区切りで複数トークン化されている前提
+        (KIK-738 backfill prompt はこの形式で抽出する)。
+        """
+        all_lessons = [
+            {"id": "L1", "trigger": "新規買付 / 候補提案",
+             "expected_action": "52Hからの距離を必ず確認"},
+            {"id": "L2", "trigger": "売却 / タイミング検討",
+             "expected_action": "ATH-40% から+30%ラリー時に利確"},
+        ]
+        user_input = "新規買付の候補提案を検討したい"
+        relevant = filter_relevant_lessons(user_input, all_lessons)
+        assert any(l["id"] == "L1" for l in relevant)
+        assert all(l["id"] != "L2" for l in relevant)  # L2 is unrelated
+        # Proposal must reference the lesson's expected_action keyphrase
+        proposal = "新規候補X 52Hからの距離を必ず確認した結果、試し玉に縮小"
+        ok, _ = verify_lesson_cited(proposal, relevant)
+        assert ok is True
