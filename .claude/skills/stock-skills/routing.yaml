@@ -8,6 +8,10 @@
 #     C = チェーン（連鎖 ≥2 or progressive or routine）
 #   header: "🎯 [<agent or chain>] <task>" 形式の Layer1 ヘッダ
 #     省略時は `[<agent>] <agent.role>` で自動生成
+#
+# History Check (KIK-740) フィールド:
+#   history_check: true  → 投資判断時に4LLM並列で過去の歴史的類似事例を自動チェック
+#     詳細は SKILL.md の "History Check" セクション参照
 
 agents:
   screener:
@@ -184,6 +188,7 @@ examples:
     pattern: B
     header: "🎯 [strategist] 入替提案"
     review: true
+    history_check: true
 
   - intent: "プランモードで"
     agents: [health-checker, analyst, researcher, strategist]
@@ -191,6 +196,7 @@ examples:
     header: "🎯 [HC → analyst → researcher → strategist] PF確認 → 分析 → リサーチ → 戦略立案"
     progressive: true
     review: true
+    history_check: true
 
   # --- 複数エージェント連鎖 (Pattern C) ---
   - intent: "今熱いテーマは？"
@@ -223,6 +229,7 @@ examples:
     pattern: C
     header: "🎯 [HC → strategist] PF数値確認 → 改善提案"
     review: true
+    history_check: true
 
   # --- 売却判断（risk-assessor → health-checker → strategist の3連鎖） ---
   - intent: "この株売るべき？"
@@ -231,6 +238,7 @@ examples:
     header: "🎯 [risk → HC → strategist] リスク判定 → 数値確認 → 売却判断"
     progressive: true
     review: true
+    history_check: true
     note: "risk-assessorで市場リスク判定→health-checkerで数値事実→strategistでcheck_exit_rule照合+What-If比較"
 
   - intent: "損切りすべき？"
@@ -239,6 +247,7 @@ examples:
     header: "🎯 [risk → HC → strategist] リスク判定 → 数値確認 → 損切り判断"
     progressive: true
     review: true
+    history_check: true
 
   - intent: "利確すべき？"
     agents: [risk-assessor, health-checker, strategist]
@@ -246,12 +255,14 @@ examples:
     header: "🎯 [risk → HC → strategist] リスク判定 → 数値確認 → 利確判断"
     progressive: true
     review: true
+    history_check: true
 
   - intent: "リスク確認して代わりを探して"
     agents: [health-checker, screener]
     pattern: C
     header: "🎯 [HC → screener] リスク確認 → 代替候補探索"
     review: true
+    history_check: true
 
   - intent: "半導体を調べて有望な銘柄を探して"
     agents: [researcher, screener]

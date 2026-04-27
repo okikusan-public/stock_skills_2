@@ -85,6 +85,67 @@ parallel_execution:
   # 並列: 独立した観点 → 同時起動
 
 # ---------------------------------------------------------------------------
+# History Check (KIK-740)
+# 投資判断時に4LLM並列で過去の歴史的類似事例を自動チェックする。
+# routing.yaml の history_check フラグ + 投資判断キーワード検知の二重トリガー。
+# 詳細仕様は SKILL.md の "History Check" セクション参照。
+# ---------------------------------------------------------------------------
+history_check:
+  run_after: agent_execution         # agent実行完了後に並列起動
+  run_before: auto_review            # thesis_check と同様、auto_review より前
+  trigger:
+    - routing_flag: "history_check: true"
+    - keyword_detect:
+        - 売却
+        - 損切り
+        - 利確
+        - 手放す
+        - 撤退
+        - 購入
+        - 買増し
+        - 入替
+        - リバランス
+        - 改善
+        - 調整
+        - 歴史
+        - 過去事例
+        - パターン
+  llm_layout:
+    # APIキー検出はオーケストレーター層で実施（os.environ 参照）
+    # 未設定LLMはスキップ（graceful degradation）
+    - llm: claude
+      role: portfolio_aligner
+      required: true                 # Claude（自身）は常に動作
+    - llm: gpt
+      role: devils_advocate
+      env_key: OPENAI_API_KEY
+      params: { model: gpt-5.5, reasoning: high }
+    - llm: gemini
+      role: lesson_auditor
+      env_key: GEMINI_API_KEY
+      params: { model: gemini-3-flash-preview, web_search: true }
+    - llm: grok
+      role: sentiment_analyst
+      env_key: XAI_API_KEY
+  output_format: |
+    ## 📚 歴史的類似事例
+    ### 全LLM一致点
+    ### 意見が割れた点（食い違いハイライト）
+    ### 統合判断（反証ポイント必須）
+  required_rules:
+    - "成功例 ≥1件 + 失敗例 ≥2件 の両論併記必須"
+    - "反証ポイントの提示必須（盲信回避）"
+    - "データ不足時は『該当事例なし』と明記し、推測を避ける"
+  skip_conditions:
+    - context: history_check_already_executed   # 同一セッション二重実行防止
+    - context: routine_mode                     # routine-*ではスキップ
+    - context: morning_summary                  # 朝サマリーではスキップ
+    - context: pure_info_query                  # 単純情報照会（VIX/PER等）ではスキップ
+  cost_guardrail:
+    max_invocations_per_session: 5              # 同一セッション5回上限
+    max_llm_calls_per_invocation: 4             # 1呼び出しあたりの最大LLM数
+
+# ---------------------------------------------------------------------------
 # Thesis Check（KIK-715）
 # HC/Strategist完了後、対象銘柄のthesis参照を機械的に検証する。
 # few-shot だけでは LLM が省略する可能性があるため、orchestration で強制する。

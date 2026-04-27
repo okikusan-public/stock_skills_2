@@ -432,6 +432,127 @@ HC / Strategist 完了後、PF銘柄の thesis 参照を機械的に検証する
 3. thesis 未登録銘柄がある → ⚠️「テーゼ未登録: [銘柄名]」を通知
 4. PF外の単発分析時はスキップ（`skip_condition: no_portfolio_context`）
 
+### History Check（KIK-740）
+
+投資判断（売却/購入/入替/リバランス/損切り/利確等）を含む銘柄分析時に、**4LLM並列で過去の歴史的類似事例を自動チェック**する。LLM内蔵知識+Web検索を活用し、ライブラリ蓄積は行わない。
+
+#### 発動条件（自動）
+
+以下のいずれかに該当 → history_check 自動発動:
+
+1. `routing.yaml` の該当パターンに `history_check: true` フラグがある
+2. ユーザー入力に投資判断キーワードが含まれる:
+   - 売却 / 損切り / 利確 / 手放す / 撤退
+   - 購入 / 買増し / 新規エントリー
+   - 入替 / リバランス / 改善 / 調整
+   - 「歴史」「過去」「事例」「パターン」（明示要求）
+
+#### 発動しないケース（重要）
+
+- 単純な情報照会（「PER何？」「VIX確認」「トヨタどう？」等）
+- 朝サマリー / `mode: routine-*` （ノイズ回避）
+- 単独 health-checker / risk-assessor の実行
+- conviction銘柄に対する「保有確認」レベルの問い合わせ
+
+#### 4LLM並列の役割分担
+
+オーケストレーターが APIキー設定済みの LLM のみ並列起動する（graceful degradation）。
+
+| LLM | 役割 | 担当領域 | 呼び出し |
+|:---|:---|:---|:---|
+| **Claude（自身）** | Portfolio Aligner | PF整合・統合判断・ユーザー履歴照合 | オーケストレーター層で直接実行 |
+| **GPT** (`gpt-5.5`, reasoning='high') | Devil's Advocate | 反証・失敗事例の指摘 | `call_llm('gpt', ...)` |
+| **Gemini** (`gemini-3-flash-preview`, web_search=True) | Lesson Auditor | Google検索で最新事例補完 | `call_llm('gemini', ..., web_search=True)` |
+| **Grok** | Sentiment Analyst | X市場の類似事例反応 | `tools/grok.py` の `search_market()` or `call_llm('grok', ...)` |
+
+**APIキー検出ロジック**: `os.environ.get('OPENAI_API_KEY')`, `GEMINI_API_KEY`, `XAI_API_KEY` が未設定なら該当LLMをスキップ。Claude（自身）は常に動作。
+
+**責務の所在**:
+- APIキー検出はオーケストレーター層で実施（各LLM呼び出しの前に判定）
+- 未設定でもエラーにせず、利用可能LLMのみで実行（graceful degradation）
+- 利用可能LLMが Claude（自身）のみの場合、その旨を出力に明記して内部知識のみで実行
+
+**データ不足時のフォールバック**:
+- 「失敗例 ≥2件」「成功例 ≥1件」の最低件数を満たせない場合、推測で補完せず「該当事例なし（データ不足）」と明記
+- 各LLMが独立に判定。1つでも基準未達なら統合判断に「データ不足」フラグを立てる
+
+#### 共通プロンプト テンプレート
+
+```
+銘柄: {symbol}
+状況サマリー: {context}
+  業績: {earnings_summary}
+  株価: {price_summary}
+  ファンダメンタルズ: {fundamentals}
+  関連lesson: {lessons}
+判断テーマ: {decision_theme}
+  例: 売却検討 / 入替検討 / 損切り判断
+
+過去の歴史的類似事例を以下の構造で挙げてください:
+- 成功例（最低1件）: 同じ状況から立ち直った企業、その要因
+- 失敗例（最低2件）: 同じ状況で衰退・破綻した企業、その要因
+- 当該銘柄との類似度評価（高/中/低）+ 根拠
+- 反証ポイント（盲信回避のため、必ず提示）
+```
+
+#### 結果統合（Claudeが裁定）
+
+各LLMの指摘を以下の構造に分類:
+
+```markdown
+## 📚 歴史的類似事例
+
+### 全LLM一致点
+- ...
+
+### 意見が割れた点（食い違いハイライト）
+- Claude: ...
+- GPT: ...
+- Gemini: ...
+- Grok: ...
+
+### 統合判断
+- 最終判断: ...
+- 反証パターン: ...
+```
+
+⚠️ MUST: **成功例だけ/失敗例だけの片寄せ提示は禁止**。必ず両論併記。
+⚠️ MUST: **反証ポイントを必ず含める**（盲信回避）。
+
+#### 並列起動パターン
+
+オーケストレーターが1メッセージで複数の LLM を同時呼び出し:
+
+```python
+# オーケストレーター内（疑似コード）
+import asyncio  # 並列はBashで複数のpython3 -cを同時発火、または
+# 個別Bash run_in_background=True で並列化
+
+# 実装上は Bash の run_in_background=True を3つ並列発火
+Bash(call_llm gpt, run_in_background=True)
+Bash(call_llm gemini, run_in_background=True)
+Bash(grok search_market, run_in_background=True)
+# Claude自身は内部知識で同時に思考
+# 完了後に統合
+```
+
+#### DeepThink との差別化
+
+| | history_check（KIK-740） | DeepThink |
+|:---|:---|:---|
+| 起動 | **自動**（投資判断キーワード検知） | 明示トリガー |
+| ラウンド数 | 1 | 複数（収束まで） |
+| 所要時間 | 30-60秒 | 15-30分 |
+| LLM数 | 4並列（1ラウンド） | 4並列 + 反復ループ |
+| 用途 | 既存判断に歴史視点を付加 | 戦略再設計・複雑シナリオ分岐 |
+| コスト | $0.10/回 | $0.50-2.00/回 |
+
+**ルール**: history_check で十分な場合は DeepThink を使わない。複数の不確実性が絡む場合のみ DeepThink へ。
+
+#### 二重実行防止
+
+同一セッションで既に history_check が実行済みの場合はスキップする。
+
 ### Reviewer 起動方針（KIK-659 / KIK-729 で再設計）
 
 エージェント実行後、`orchestration.yaml` の `auto_review` / `adhoc_review` ルールに従い Reviewer 起動を3分類で制御する。
