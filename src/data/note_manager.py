@@ -412,23 +412,33 @@ def _parse_threshold(value: str) -> Optional[float]:
         return None
 
 
+_VALID_PERSISTENCE = {"permanent", "situational", "seasonal", "expired"}
+
+
 def update_lesson_metadata(
     note_id: str,
     *,
     trigger: Optional[str] = None,
     expected_action: Optional[str] = None,
     key_kpis: Optional[list] = None,
+    persistence: Optional[str] = None,
     base_dir: str = _NOTES_DIR,
 ) -> Optional[dict]:
-    """Update structured metadata fields on an existing lesson note (KIK-738).
+    """Update structured metadata fields on an existing lesson note (KIK-738/KIK-739).
 
-    Only `trigger` / `expected_action` / `key_kpis` are modifiable here.
+    Modifiable fields:
+      - trigger, expected_action, key_kpis (KIK-738)
+      - persistence: one of permanent | situational | seasonal | expired (KIK-739)
+
     Other fields (content, date, symbol, etc.) are preserved as master truth.
-    Returns the updated note dict, or None if not found.
+    Returns the updated note dict, or None if not found / invalid.
 
     Pass None for a field to leave it unchanged. Pass an empty string/list to
     explicitly clear it (rarely useful — usually you want to add).
     """
+    if persistence is not None and persistence not in _VALID_PERSISTENCE:
+        return None
+
     d = Path(base_dir)
     if not d.exists():
         return None
@@ -454,6 +464,8 @@ def update_lesson_metadata(
                 n["expected_action"] = expected_action
             if key_kpis is not None:
                 n["key_kpis"] = list(key_kpis)
+            if persistence is not None:
+                n["persistence"] = persistence
             updated = n
             modified = True
             break
@@ -475,11 +487,13 @@ def update_lesson_metadata(
                 if driver is not None:
                     driver.execute_query(
                         "MATCH (n:Note {id: $nid}) "
-                        "SET n.trigger = $trig, n.expected_action = $action, n.key_kpis = $kpis",
+                        "SET n.trigger = $trig, n.expected_action = $action, "
+                        "n.key_kpis = $kpis, n.persistence = $persistence",
                         nid=note_id,
                         trig=updated.get("trigger") or "",
                         action=updated.get("expected_action") or "",
                         kpis=updated.get("key_kpis") or [],
+                        persistence=updated.get("persistence") or "",
                         database_="neo4j",
                     )
         except Exception:

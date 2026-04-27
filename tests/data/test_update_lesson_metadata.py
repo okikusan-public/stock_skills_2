@@ -104,3 +104,49 @@ class TestUpdateLessonMetadata:
         target = next(n for n in (data if isinstance(data, list) else [data])
                       if n.get("id") == nid)
         assert target["key_kpis"] == ["C"]
+
+
+# ---------------------------------------------------------------------------
+# KIK-739: persistence parameter
+# ---------------------------------------------------------------------------
+
+
+class TestPersistenceField:
+    def test_set_permanent(self, lesson_dir):
+        d, nid = lesson_dir
+        out = update_lesson_metadata(nid, persistence="permanent", base_dir=str(d))
+        assert out is not None
+        assert out["persistence"] == "permanent"
+
+    def test_set_seasonal_persists_to_disk(self, lesson_dir):
+        d, nid = lesson_dir
+        update_lesson_metadata(nid, persistence="seasonal", base_dir=str(d))
+        files = list(d.glob("*.json"))
+        data = json.loads(files[0].read_text(encoding="utf-8"))
+        target = next(n for n in (data if isinstance(data, list) else [data])
+                      if n.get("id") == nid)
+        assert target["persistence"] == "seasonal"
+
+    def test_invalid_persistence_returns_none(self, lesson_dir):
+        d, nid = lesson_dir
+        out = update_lesson_metadata(nid, persistence="bogus", base_dir=str(d))
+        assert out is None
+
+    def test_persistence_combined_with_other_fields(self, lesson_dir):
+        d, nid = lesson_dir
+        out = update_lesson_metadata(
+            nid,
+            trigger="t",
+            persistence="situational",
+            base_dir=str(d),
+        )
+        assert out is not None
+        assert out["trigger"] == "t"
+        assert out["persistence"] == "situational"
+
+    def test_all_four_valid_values(self, lesson_dir):
+        d, nid = lesson_dir
+        for v in ("permanent", "situational", "seasonal", "expired"):
+            out = update_lesson_metadata(nid, persistence=v, base_dir=str(d))
+            assert out is not None
+            assert out["persistence"] == v

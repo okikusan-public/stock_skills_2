@@ -415,6 +415,44 @@ for sym in dr_rejected:
 DR が新フォーマットになったら正規表現を拡張すること。テストは
 `tests/data/test_lesson_enforcer.py::TestStep5HookScenarios` に整合パターンあり。
 
+**⚠️ MUST (KIK-739): 提案出力直前に Layer 5 (Cited Sources) を生成し、本文末尾に追加。**
+
+「依拠した note の可視化 + 鮮度マーカー」で、古い情報の生ゴミ化を防ぐ
+(2026-04-28 セッションで判明した「lesson が引用されない」「ATH 接近を見逃す」課題への対応)。
+
+```python
+from src.data.citation_formatter import format_cited_sources
+
+# verify で実際に引用済みと判定された lessons を citation 候補に
+cited_lessons = [l for l in relevant_lessons if l.get("id") not in missing_lesson_ids]
+# 対象銘柄の thesis (Step 1 でロード済) のうち、提案文中に symbol が登場するものを cited に
+cited_theses = [
+    t for t in all_theses
+    if (t.get("symbol") or "") and t["symbol"] in final_proposal_text
+]
+# 各引用ノートが提案のどこに使われたか 1 行でメモ。
+# key は note['id'] (実際の保存形式: e.g. 'note_2026-04-24_portfolio_a1b2c3d4')
+used_for_map = {
+    cited_lessons[0]["id"]: "Cash 15-20% 判定",
+    cited_lessons[1]["id"]: "売却対象除外",
+    # ... 各 cited_lessons / cited_theses から id を引いてマッピング
+}
+
+citation_block = format_cited_sources(
+    cited_lessons, cited_theses, used_for_map=used_for_map,
+)
+final_proposal_text = final_proposal_text.rstrip() + "\n\n" + citation_block
+```
+
+`format_cited_sources` の鮮度マーカー規則:
+- `permanent` タグ → 🟢 (常時 fresh、永続ルール)
+- `seasonal` (or タグ無し) → 0-30日 🟢 / 31-90日 🟡 / 91日+ 🔴
+- `expired` → 出力から自動除外
+- thesis に conviction_override → 🔒 (鮮度無視)
+
+引用ゼロは **lesson 形骸化の典型** (2026-04-27 撤回ログのパターン) — 上の verify_lesson_cited
+が abort するので、ここに到達した時点で必ず 1 件以上 citation がある状態。
+
 **エグゼクティブサマリー先行の3部構成（サマリー、議論の統合、詳細）で出力する。**
 
 **以下のフォーマットに厳密に従うこと。省略・変更しない。**

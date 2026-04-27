@@ -20,7 +20,13 @@ user_invocable: true
 [Layer 3] 本体 (Pattern A/B/Cで切替)      ← 結論+詳細
 ─────────────────
 [Layer 4] フッタ (実行後・順序固定)       ← 保存/Reviewer提案/次アクション
+─────────────────
+[Layer 5] Cited Sources (KIK-739)         ← 依拠した lesson/thesis + 鮮度マーカー
 ```
+
+Layer 5 は **投資判断 / 売買提案 / strategist or DeepThink 出力** を含むレポートで必須。
+`src/data/citation_formatter.format_cited_sources()` で生成。詳細は本ファイル末尾の
+「Layer 5: Cited Sources」セクション参照。
 
 ### Layer 1: ヘッダ（常時ON）
 
@@ -632,7 +638,62 @@ if is_available():
 - 次の自然なアクションを1-2個提案する
 - 直前の会話で扱った銘柄・結果を引き継ぎ、省略された情報を補完する
 
+## Layer 5: Cited Sources (KIK-739)
+
+「**何に依拠して結論を出したか**」を可視化することで、古い情報の生ゴミ化を防ぐ。
+2026-04-28 セッション (META 推奨ミス・AVGO/NEE ATH 見落とし) の根本対策。
+
+### 適用条件 (Layer 5 を出すべきパターン)
+
+- 投資判断 / 売買提案 / トリム / リバランスを含む
+- DeepThink Step 5 出力
+- Strategist agent の最終提案
+- routine-weekly レポート
+- `routing.yaml` の該当 routing で `layer5: required` フラグがある場合
+
+逆に **不要なケース**: `health-checker` 単独 / `risk-assessor` 単独 / 単純な事実照会
+(Pattern A 軽量) は Layer 5 をスキップしてよい。
+
+### 出力フォーマット
+
+`src/data/citation_formatter.format_cited_sources(cited_lessons, cited_theses, used_for_map)` が
+markdown ブロックを返す。本文末尾に追加するだけ。
+
+```
+## 📚 Cited Sources
+
+### Lessons
+- 🟢 [permanent] 2026-04-24 PFバランス normal — Cash 15-20% 判定
+- 🟢 [permanent] 2026-04-25 7751.T HOLD-LOCK — 売却対象除外
+- 🟡 [seasonal/45日] 2026-03-22 金利4%超ヘッジ — 金利感応度判定 ⚠ 古い: 環境変化あれば再確認
+
+### Theses
+- 🔒 [conviction] 2026-04-25 7751.T ホールド確定
+- 🟢 2026-04-24 MSFT 投資テーゼ — 押し目買い増し根拠
+```
+
+### 鮮度マーカー規則
+
+| マーカー | 条件 |
+|:---:|:---|
+| 🟢 | `permanent` タグ / 30 日以内 |
+| 🟡 | `seasonal` タグで 31-90 日 |
+| 🔴 | `seasonal` タグで 91 日超 / date 不明 |
+| ⛔ | `expired` タグ → 自動除外 (出力しない) |
+| 🔒 | thesis with `conviction_override=true` |
+
+### 引用判定 (citation 抽出)
+
+DeepThink Step 5 で `verify_lesson_cited()` (KIK-738) が成功したリストから自動抽出:
+
+```python
+cited_lessons = [l for l in relevant_lessons if l.get("id") not in missing_lesson_ids]
+```
+
+verify が abort した時点で 1 件も citation がない状態は発生しない (lesson 形骸化阻止)。
+
 ## References
 
 - ルーティング few-shot: [routing.yaml](./routing.yaml)
 - 自律修正ループ: [orchestration.yaml](./orchestration.yaml)
+- Citation formatter: [src/data/citation_formatter.py](../../../src/data/citation_formatter.py)

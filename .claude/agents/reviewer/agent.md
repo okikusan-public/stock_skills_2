@@ -68,6 +68,22 @@ if not ok:
     print(f'WARN: lesson 未引用 ({missing}) - 整合性レビュアーが必ず検証')
 ```
 
+**⚠️ MUST (KIK-739): 投資判断レポートに Layer 5 (Cited Sources) があるか確認する。**
+無い場合は WARN とし、追加生成するか整合性レビュアーで検証する：
+
+```python
+if "Cited Sources" not in target_text and any(
+    kw in target_text for kw in ("売却", "購入", "買い増し", "リバランス", "入替")
+):
+    from src.data.citation_formatter import format_cited_sources
+    cited = [l for l in relevant if l.get("id") not in missing]
+    print("WARN: Layer 5 (Cited Sources) が無い")
+    print(format_cited_sources(cited))  # 自動生成して提示
+```
+
+加えて Cited Sources セクションに **🟡/🔴 マーカー (古い lesson)** がある場合、
+整合性レビュアーは「その古い lesson が今の状況に依然有効か」を明示的に検証する。
+
 lesson が 0 件でない限り、レビューは必ず lesson を参照して実施する。
 
 ### 2. レビュー対象の受け取り
