@@ -352,3 +352,111 @@ class TestMetaLogging:
         )
         r = gemini_deep_research("AI")
         assert r["status"] == "disabled"
+
+
+# ---------------------------------------------------------------------------
+# KIK-737: dry_run + actual cost
+# ---------------------------------------------------------------------------
+
+
+class TestDryRun:
+    def test_dry_run_arg_skips_api(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("DEEPTHINK_DR_ENABLED", "on")
+        monkeypatch.setenv("GEMINI_API_KEY", "test")
+        monkeypatch.delenv("DEEPTHINK_DRY_RUN", raising=False)
+        monkeypatch.setattr(
+            "src.data.gemini_client.deep_research._META_LOG_PATH",
+            tmp_path / "log.jsonl",
+        )
+        with patch(
+            "src.data.gemini_client.deep_research.requests.post"
+        ) as p:
+            r = gemini_deep_research("AI", depth="medium", dry_run=True)
+        assert p.call_count == 0
+        assert r["status"] == "dry_run"
+        assert r["cost_usd"] == 2.5  # estimate
+        assert r["actual_cost_usd"] == 0.0
+
+    def test_env_var_forces_dry_run(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("DEEPTHINK_DR_ENABLED", "on")
+        monkeypatch.setenv("GEMINI_API_KEY", "test")
+        monkeypatch.setenv("DEEPTHINK_DRY_RUN", "1")
+        monkeypatch.setattr(
+            "src.data.gemini_client.deep_research._META_LOG_PATH",
+            tmp_path / "log.jsonl",
+        )
+        with patch(
+            "src.data.gemini_client.deep_research.requests.post"
+        ) as p:
+            r = gemini_deep_research("AI", depth="light")
+        assert p.call_count == 0
+        assert r["status"] == "dry_run"
+
+    def test_dry_run_overrides_kill_switch(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("DEEPTHINK_DR_ENABLED", "off")
+        monkeypatch.delenv("DEEPTHINK_DRY_RUN", raising=False)
+        monkeypatch.setattr(
+            "src.data.gemini_client.deep_research._META_LOG_PATH",
+            tmp_path / "log.jsonl",
+        )
+        r = gemini_deep_research("AI", dry_run=True)
+        assert r["status"] == "dry_run"
+
+
+class TestActualCost:
+    def test_actual_cost_calculated_from_usage_metadata(self):
+        from src.data.gemini_client.deep_research import calc_actual_cost_usd
+        usage = {
+            "input_tokens": 12000,
+            "output_tokens": 3000,
+            "thinking_tokens": 5000,
+            "tool_tokens": 200000,
+        }
+        # 12000*0.00125/1k=0.015 + 3000*0.005/1k=0.015
+        # + 5000*0.005/1k=0.025 + 200000*0.0001/1k=0.020 = 0.075
+        assert calc_actual_cost_usd(usage) == 0.075
+
+    def test_actual_cost_with_inline_completed(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("DEEPTHINK_DR_ENABLED", "on")
+        monkeypatch.setenv("GEMINI_API_KEY", "test")
+        monkeypatch.delenv("DEEPTHINK_DRY_RUN", raising=False)
+        monkeypatch.setattr(
+            "src.data.gemini_client.deep_research._META_LOG_PATH",
+            tmp_path / "log.jsonl",
+        )
+        inline = MagicMock()
+        inline.status_code = 200
+        inline.raise_for_status = MagicMock()
+        inline.json.return_value = {
+            "id": "v1_xyz",
+            "status": "completed",
+            "outputs": [{"content": [{"text": "ok"}], "annotations": []}],
+            "usage_metadata": {
+                "input_tokens": 10000,
+                "output_tokens": 2000,
+            },
+        }
+        with patch(
+            "src.data.gemini_client.deep_research.requests.post",
+            return_value=inline,
+        ):
+            r = gemini_deep_research("AI", depth="light")
+        # 10000*0.00125 + 2000*0.005 = 0.0125 + 0.01 = 0.0225
+        assert r["status"] == "ok"
+        assert r["actual_cost_usd"] == 0.0225
+
+    def test_actual_cost_zero_without_usage_metadata(self):
+        from src.data.gemini_client.deep_research import calc_actual_cost_usd
+        assert calc_actual_cost_usd({}) == 0.0
+        assert calc_actual_cost_usd(None) == 0.0
+
+
+class TestDepthBasedTimeout:
+    def test_light_medium_use_15min(self):
+        from src.data.gemini_client.deep_research import _WALL_TIME_BY_DEPTH
+        assert _WALL_TIME_BY_DEPTH["light"] == 900
+        assert _WALL_TIME_BY_DEPTH["medium"] == 900
+
+    def test_deep_uses_30min(self):
+        from src.data.gemini_client.deep_research import _WALL_TIME_BY_DEPTH
+        assert _WALL_TIME_BY_DEPTH["deep"] == 1800

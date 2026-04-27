@@ -50,20 +50,38 @@ def load_meta_records(month: str) -> list[dict]:
 
 
 def summarize(records: list[dict]) -> dict:
-    """Aggregate by tool: count, total_cost_usd, errors."""
-    by_tool: dict = defaultdict(lambda: {"count": 0, "cost_usd": 0.0, "errors": 0})
+    """Aggregate by tool: count, total_cost_usd, actual_cost_usd, errors.
+
+    KIK-737: actual_cost_usd is summed from records that include it
+    (Gemini DR usageMetadata-based). Used for estimate vs actual divergence.
+    """
+    by_tool: dict = defaultdict(
+        lambda: {"count": 0, "cost_usd": 0.0, "actual_cost_usd": 0.0, "errors": 0}
+    )
     total_cost = 0.0
+    total_actual = 0.0
     for r in records:
         tool = r.get("tool", "unknown")
         by_tool[tool]["count"] += 1
         cost = float(r.get("cost_usd") or 0)
+        actual = float(r.get("actual_cost_usd") or 0)
         by_tool[tool]["cost_usd"] += cost
+        by_tool[tool]["actual_cost_usd"] += actual
         total_cost += cost
+        total_actual += actual
         if r.get("status") not in (None, "ok") or r.get("error"):
             by_tool[tool]["errors"] += 1
     return {
         "total_cost_usd": round(total_cost, 2),
-        "by_tool": {k: {**v, "cost_usd": round(v["cost_usd"], 2)} for k, v in by_tool.items()},
+        "total_actual_cost_usd": round(total_actual, 2),
+        "by_tool": {
+            k: {
+                **v,
+                "cost_usd": round(v["cost_usd"], 2),
+                "actual_cost_usd": round(v["actual_cost_usd"], 2),
+            }
+            for k, v in by_tool.items()
+        },
     }
 
 
@@ -75,15 +93,28 @@ def format_summary(month: str, summary: dict, budget_usd: float) -> str:
     else:
         for tool, data in sorted(by_tool.items()):
             err_part = f" (errors: {data['errors']})" if data["errors"] else ""
+            actual = data.get("actual_cost_usd", 0.0)
+            actual_part = f" / actual ${actual:.2f}" if actual else ""
             lines.append(
-                f"  {tool}: {data['count']}回 / ${data['cost_usd']:.2f}{err_part}"
+                f"  {tool}: {data['count']}回 / est ${data['cost_usd']:.2f}{actual_part}{err_part}"
             )
     lines.append("  ────────────────────")
     total = summary["total_cost_usd"]
+    actual_total = summary.get("total_actual_cost_usd", 0.0)
     pct = (total / budget_usd * 100) if budget_usd else 0
-    lines.append(f"  合計: ${total:.2f} / 月予算 ${budget_usd:.2f} ({pct:.0f}%)")
+    lines.append(
+        f"  合計: estimate ${total:.2f} / actual ${actual_total:.2f} / 月予算 ${budget_usd:.2f} ({pct:.0f}%)"
+    )
     if pct >= 80:
         lines.append("  ⚠ 月予算 80% 到達。残り使用は要注意")
+    # KIK-737: Estimate vs Actual divergence warning (>20%)
+    if actual_total > 0 and total > 0:
+        divergence = abs(actual_total - total) / total * 100
+        if divergence > 20:
+            direction = "過大" if total > actual_total else "過小"
+            lines.append(
+                f"  ⚠ コスト推定の精度を再校正してください（estimate {direction}見積もり、乖離 {divergence:.0f}%）"
+            )
     return "\n".join(lines)
 
 

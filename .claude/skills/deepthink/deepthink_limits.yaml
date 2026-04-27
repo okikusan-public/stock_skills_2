@@ -44,9 +44,14 @@ tool_limits:
     estimated_cost_usd:
       light: 1.5
       medium: 2.5
-      heavy: 5.0
-    wall_time_per_call_sec: 1800      # 30 min ハードキャンセル
+      deep: 5.0                       # KIK-737: 'heavy' → 'deep' に統一
+    # KIK-737: depth 連動 wall_time（light/medium=15min, deep=30min）
+    wall_time_by_depth_sec:
+      light: 900
+      medium: 900
+      deep: 1800
     kill_switch_env: DEEPTHINK_DR_ENABLED  # =off で実行停止
+    dry_run_env: DEEPTHINK_DRY_RUN        # KIK-737: =1 で API 不要 dry_run
     log_path: data/logs/deepthink_meta.jsonl
   grok_bulk_x_search:
     max_calls_per_session: 5

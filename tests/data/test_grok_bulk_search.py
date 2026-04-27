@@ -37,6 +37,7 @@ def _mock_grok_response(text: str, sources: list[str]):
 class TestBulkXSearch:
     def test_no_api_key_returns_error(self, monkeypatch, patch_meta_log):
         monkeypatch.delenv("XAI_API_KEY", raising=False)
+        monkeypatch.delenv("DEEPTHINK_DRY_RUN", raising=False)
         out = bulk_x_search(["$NVDA", "$AAPL"])
         assert out["error"] == "XAI_API_KEY not set"
         assert out["successful_calls"] == 0
@@ -120,3 +121,30 @@ class TestBulkWebSearch:
         ):
             bulk_web_search(["q"], allowed_domains=[f"d{i}.com" for i in range(10)])
         assert len(captured["payload"]["tools"][0]["allowed_domains"]) == 5
+
+
+class TestBulkDryRun:
+    """KIK-737: dry_run for bulk searches."""
+
+    def test_dry_run_arg_skips_api(self, monkeypatch, patch_meta_log):
+        monkeypatch.setenv("XAI_API_KEY", "test")
+        with patch(
+            "src.data.grok_client.bulk_search.requests.post"
+        ) as p:
+            out = bulk_x_search(["$NVDA", "$AAPL"], dry_run=True)
+        assert p.call_count == 0
+        assert out["dry_run"] is True
+        assert out["successful_calls"] == 0
+        assert out["estimate_cost_usd"] == 1.0  # 0.5 × 2
+        assert all(r["status"] == "dry_run" for r in out["results"])
+
+    def test_env_var_forces_dry_run(self, monkeypatch, patch_meta_log):
+        monkeypatch.setenv("XAI_API_KEY", "test")
+        monkeypatch.setenv("DEEPTHINK_DRY_RUN", "1")
+        with patch(
+            "src.data.grok_client.bulk_search.requests.post"
+        ) as p:
+            out = bulk_web_search(["earnings"])
+        assert p.call_count == 0
+        assert out["dry_run"] is True
+        assert out["estimate_cost_usd"] == 0.5

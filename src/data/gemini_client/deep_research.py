@@ -43,8 +43,21 @@ _DEPTH_COST_USD = {
     "medium": 2.5,
     "deep": 5.0,
 }
-# Hard wall-time per call. Gemini DR API allows up to 60 min; we cap at 30 min.
-_DEFAULT_TIMEOUT_SEC = 1800
+# KIK-737: Gemini long-context tier pricing (USD per 1k tokens). 後で yaml 化可能。
+_GEMINI_LONG_CONTEXT_PRICING_PER_1K = {
+    "input_tokens": 0.00125,
+    "output_tokens": 0.005,
+    "thinking_tokens": 0.005,
+    "tool_tokens": 0.0001,
+}
+
+# KIK-737: Hard wall-time. light/medium=15min, deep=30min。
+_WALL_TIME_BY_DEPTH = {
+    "light": 900,
+    "medium": 900,
+    "deep": 1800,
+}
+_DEFAULT_TIMEOUT_SEC = _WALL_TIME_BY_DEPTH["medium"]  # 後方互換
 _POLL_INTERVAL_SEC = 10
 
 
@@ -58,28 +71,67 @@ def is_deep_research_enabled() -> bool:
     return os.environ.get("DEEPTHINK_DR_ENABLED", "on").lower() != "off"
 
 
+def is_dry_run() -> bool:
+    """KIK-737: True if DEEPTHINK_DRY_RUN=1 (forces dry_run on every call)."""
+    return os.environ.get("DEEPTHINK_DRY_RUN", "").lower() in ("1", "on", "true")
+
+
+def calc_actual_cost_usd(usage_metadata: dict) -> float:
+    """KIK-737: Compute actual cost from Gemini DR usage_metadata.
+
+    Expected keys (Gemini /v1beta/interactions response):
+      input_tokens, output_tokens, thinking_tokens, tool_tokens
+    Missing keys are treated as 0.
+    """
+    if not isinstance(usage_metadata, dict):
+        return 0.0
+    total = 0.0
+    for key, price_per_1k in _GEMINI_LONG_CONTEXT_PRICING_PER_1K.items():
+        tokens = float(usage_metadata.get(key) or 0)
+        total += (tokens / 1000.0) * price_per_1k
+    return round(total, 4)
+
+
 def gemini_deep_research(
     theme: str,
     depth: str = "medium",
     budget_usd: float = 3.0,
-    timeout_sec: int = _DEFAULT_TIMEOUT_SEC,
+    timeout_sec: int | None = None,
     model: str = _DEFAULT_MODEL,
+    dry_run: bool = False,
 ) -> dict[str, Any]:
     """Run a single Gemini Deep Research task via /v1beta/interactions.
+
+    KIK-737:
+      - timeout_sec=None で depth 連動デフォルト（light/medium=15min, deep=30min）
+      - dry_run=True で API を呼ばず estimate のみ返す
+      - DEEPTHINK_DRY_RUN=1 環境変数で全コール強制 dry_run
 
     Returns
     -------
     dict with keys:
-        text          : str
-        sources       : list[str]   # citation URLs
-        cost_usd      : float       # estimated cost
-        duration_sec  : float
-        status        : "ok" | "budget_exceeded" | "disabled" | "no_api_key" | "timeout" | "error"
-        error_message : str | None
-        interaction_id : str | None  # KIK-733: the long-running interaction id
+        text             : str
+        sources          : list[str]
+        cost_usd         : float    # estimated cost (pre-execution)
+        actual_cost_usd  : float    # 実トークン基準実コスト (KIK-737, status=ok のみ)
+        duration_sec     : float
+        status           : "ok" | "budget_exceeded" | "disabled" | "no_api_key" | "timeout" | "error" | "dry_run"
+        error_message    : str | None
+        interaction_id   : str | None
+        usage_metadata   : dict | None   # KIK-737
     """
     started_at = time.time()
     estimate = _DEPTH_COST_USD.get(depth, _DEPTH_COST_USD["medium"])
+    if timeout_sec is None:
+        timeout_sec = _WALL_TIME_BY_DEPTH.get(depth, _WALL_TIME_BY_DEPTH["medium"])
+
+    # KIK-737: dry_run（個別引数 OR 環境変数）→ API 不要
+    if dry_run or is_dry_run():
+        return _make_result(
+            theme, depth, estimate, started_at,
+            status="dry_run",
+            error_message="dry_run=True (no API call)",
+        )
 
     if not is_deep_research_enabled():
         return _make_result(
@@ -104,7 +156,7 @@ def gemini_deep_research(
         )
 
     try:
-        text, sources, interaction_id = _run_deep_research(
+        text, sources, interaction_id, usage_metadata = _run_deep_research(
             api_key, model, theme, timeout_sec,
         )
     except _DRTimeout as exc:
@@ -127,6 +179,7 @@ def gemini_deep_research(
         text=text,
         sources=sources,
         interaction_id=interaction_id,
+        usage_metadata=usage_metadata,
     )
 
 
@@ -145,10 +198,11 @@ class _DRTimeout(Exception):
 
 def _run_deep_research(
     api_key: str, model: str, theme: str, timeout_sec: int,
-) -> tuple[str, list[str], str | None]:
+) -> tuple[str, list[str], str | None, dict]:
     """Submit DR interaction and poll until done or wall-time exceed.
 
     KIK-733: Uses /v1beta/interactions (NOT generateContent).
+    KIK-737: Returns usage_metadata as 4th tuple member.
     """
     submit_url = f"{_API_BASE}/interactions?key={api_key}"
     payload = {
@@ -163,24 +217,25 @@ def _run_deep_research(
     interaction_id = submit_body.get("id")
     initial_status = submit_body.get("status")
 
-    # If already complete inline (rare), extract immediately.
     if initial_status == "completed":
         text, sources = _extract_text_and_sources(submit_body)
-        return text, sources, interaction_id
+        usage = submit_body.get("usage_metadata") or {}
+        return text, sources, interaction_id, usage
 
     if not interaction_id:
         raise ValueError(f"submit response missing 'id': {submit_body}")
 
-    text, sources = _poll_interaction(api_key, interaction_id, timeout_sec)
-    return text, sources, interaction_id
+    text, sources, usage = _poll_interaction(api_key, interaction_id, timeout_sec)
+    return text, sources, interaction_id, usage
 
 
 def _poll_interaction(
     api_key: str, interaction_id: str, timeout_sec: int,
-) -> tuple[str, list[str]]:
+) -> tuple[str, list[str], dict]:
     """Poll the long-running interaction until completed or deadline.
 
     KIK-733: Uses /v1beta/interactions/{id} (NOT operations/*).
+    KIK-737: Returns usage_metadata.
     """
     deadline = time.time() + timeout_sec
     poll_url = f"{_API_BASE}/interactions/{interaction_id}?key={api_key}"
@@ -191,7 +246,9 @@ def _poll_interaction(
         body = r.json()
         status = body.get("status")
         if status == "completed":
-            return _extract_text_and_sources(body)
+            text, sources = _extract_text_and_sources(body)
+            usage = body.get("usage_metadata") or {}
+            return text, sources, usage
         if status == "failed":
             raise ValueError(
                 f"interaction failed: {body.get('error') or body.get('status')}"
@@ -252,17 +309,21 @@ def _make_result(
     sources: list[str] | None = None,
     error_message: str | None = None,
     interaction_id: str | None = None,
+    usage_metadata: dict | None = None,
 ) -> dict[str, Any]:
     """Build result dict and append to meta log (best-effort)."""
     duration = time.time() - started_at
+    actual_cost = calc_actual_cost_usd(usage_metadata) if usage_metadata else 0.0
     result = {
         "text": text,
         "sources": sources or [],
         "cost_usd": cost_usd,
+        "actual_cost_usd": actual_cost,
         "duration_sec": round(duration, 2),
         "status": status,
         "error_message": error_message,
         "interaction_id": interaction_id,
+        "usage_metadata": usage_metadata,
     }
     _append_meta_log(theme, depth, result)
     return result
@@ -279,6 +340,7 @@ def _append_meta_log(theme: str, depth: str, result: dict) -> None:
             "depth": depth,
             "status": result["status"],
             "cost_usd": result["cost_usd"],
+            "actual_cost_usd": result.get("actual_cost_usd", 0.0),
             "sources_count": len(result["sources"]),
             "duration_sec": result["duration_sec"],
             "error_message": result.get("error_message"),

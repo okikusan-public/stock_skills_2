@@ -47,6 +47,19 @@ Evaluator-Optimizer パターンで自律的に深掘り分析する。通常の
 続けますか？ [このまま実行 / プラン修正 / キャンセル]
 ```
 
+**⚠️ MUST (KIK-735): Step 1 開始前に preflight gate を必ず通す。**
+
+```python
+from tools.preflight import run_preflight
+result = run_preflight(domain="pf")  # PF系テーマ。market/sector/stock も可
+if not result["passed"]:
+    # violations をユーザーに提示し abort
+    raise SystemExit(f"Preflight failed: {result['violations']}")
+```
+
+これで cash_balance.json 未参照 / conviction 違反 / lot_size 不正をコードレベルで阻止できる
+（2026-04-27 PF徹底レビューの誤推奨事故の再発防止）。
+
 **実行プランはテーマから自動生成する（ゼロショット）。** 典型例:
 
 | テーマ | Step 1 | 想定される Step 3 |
@@ -315,6 +328,17 @@ Swarm 割当: [テーマ名]
 ユーザーが「止めて」「方向修正」と言った場合のみ停止。
 
 ### Step 5: 統合レポート
+
+**⚠️ MUST (KIK-735): 売買・トリム・売却提案を含む場合、Step 5 直前に preflight 再検証。**
+
+```python
+from tools.preflight import run_preflight
+proposed = [("trim", "NVDA", 3), ("sell", "AMZN", 10)]  # 例
+result = run_preflight(domain="pf", proposed_actions=proposed)
+if not result["passed"]:
+    # conviction 違反 / lot_size 不正 → 推奨を出力前に修正
+    raise SystemExit(f"Preflight failed at Step 5: {result['violations']}")
+```
 
 **エグゼクティブサマリー先行の3部構成（サマリー、議論の統合、詳細）で出力する。**
 

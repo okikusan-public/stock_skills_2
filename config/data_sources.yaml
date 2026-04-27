@@ -1,0 +1,42 @@
+# Data sources SSoT (KIK-736).
+#
+# Domain → required (must be present) / recommended (should ideally be loaded).
+# DeepThink Step 0 looks up the domain and asserts that required entries
+# are loadable before proceeding.
+#
+# Each entry is either a `path:` (relative to repo root) or a `tool:` reference
+# (matching `config/tools.yaml`).
+
+domains:
+  pf:
+    description: "Portfolio analysis: holdings + cash + thesis/exit-rule notes"
+    required:
+      - path: data/portfolio.csv
+      - path: data/cash_balance.json
+    recommended:
+      - path: data/notes/  # thesis / observation / exit-rule / lesson
+      - path: data/history/trade/
+
+  market:
+    description: "Market regime / macro / sector signals"
+    required:
+      - tool: yahoo_finance.get_stock_info
+    recommended:
+      - tool: grok.search_market
+      - tool: grok.search_x_sentiment
+
+  sector:
+    description: "Sector rotation / theme analysis"
+    required:
+      - tool: yahoo_finance.get_stock_info
+    recommended:
+      - tool: grok.search_industry
+
+  stock:
+    description: "Single-stock analysis (analyst / researcher)"
+    required:
+      - tool: yahoo_finance.get_stock_info
+      - tool: yahoo_finance.get_price_history
+    recommended:
+      - tool: grok.search_stock_deep
+      - path: data/notes/  # thesis / observation
