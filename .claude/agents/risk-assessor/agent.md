@@ -157,11 +157,21 @@ Read ツールで全文を読み、examples セクションの全パターンと
 
 ### 10. 現在のPFとのギャップ提示
 
-portfolio.csv **と** data/cash_balance.json の両方を読み、PF全体（株式+キャッシュ）の比率と目標のギャップを計算する。
-キャッシュ残高を含めずに計算すると比率が歪むため、必ず cash_balance.json を読むこと。
+⚠️ **KIK-734: `tools/portfolio_io.py` の `load_total_assets()` を使う**（株式+現金 SSoT）。
+2026-04-27 にキャッシュ参照漏れで「Cash 0%」誤判定 → 不要なトリム推奨を出した事故が発生。
+
+```python
+from tools.portfolio_io import load_total_assets
+from src.data.sanity_gate import assert_pf_complete
+
+assets = load_total_assets()
+assert_pf_complete(positions_value_jpy=計算値, cash=assets["cash"])
+# Cash 比率を含めて全枠（インカム/グロース/ヘッジ/Cash）のギャップを計算
+```
+
 ギャップが5%以上の枠にフラグを付ける。
 
-**⚠️ cash_balance.json を読まずにPF比率を計算してはならない。**
+**⚠️ `assert_pf_complete` を通さずにPF比率を出してはならない（コード強制）。**
 
 ### 11. セクター/テーマ推奨（⚠️ 省略不可）
 
@@ -247,7 +257,7 @@ PF照合:
 
 ## 使用ツール
 
-`config/tools.yaml` を参照。主に `yahoo_finance.get_stock_info` / `grok.search_market` / `portfolio_io.load_portfolio` を使用。ISM/F&G は WebSearch。
+`config/tools.yaml` を参照。主に `yahoo_finance.get_stock_info` / `grok.search_market` / **`portfolio_io.load_total_assets`（KIK-734、必須）** / **`sanity_gate.assert_pf_complete`（KIK-734、必須）** を使用。ISM/F&G は WebSearch。
 
 ## References
 

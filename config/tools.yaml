@@ -97,6 +97,31 @@ tools:
       load_portfolio:
         description: "ポートフォリオ保有状況の読込（CSV）"
         when: "PF関連テーマ時（必須）。配分・通貨・ロール分析に使う"
+      load_cash_balance:
+        description: "キャッシュ残高読込（cash_balance.json）"
+        when: "PF総資産計算時（必須）。Cash% 比率算出には load_total_assets 推奨"
+        note: "KIK-734: HC/Risk Assessor は cash_balance.json を必ず参照すること"
+      load_total_assets:
+        description: "PF総資産（株式 + 現金）の SSoT 関数"
+        when: "PF総資産・Cash% 計算時（必須）。load_portfolio + load_cash_balance を一括取得"
+        note: "KIK-734: 戻り値 {positions, cash, cash_jpy, has_cash}。HC/Risk のキャッシュ参照漏れ防止"
+
+  sanity_gate:
+    source: src/data/sanity_gate.py
+    functions:
+      assert_pf_complete:
+        description: "PF総資産計算のキャッシュ参照漏れを assert で防ぐ"
+        when: "推奨生成前（必須）。HC/Risk Assessor で PF比率を出す前に通す"
+      assert_lot_size:
+        description: "JP/SG/JKT/HK/KS 株は100株単位、米株は1株可の assert"
+        when: "売買提案時（必須）。一部売却不可な銘柄での桁ミス防止"
+      assert_conviction_respected:
+        description: "conviction 銘柄への売却・トリム提案禁止 assert"
+        when: "売買提案時（必須）。ホールド確定銘柄の保護"
+      run_all_gates:
+        description: "上記3 gate を一括実行する便利関数"
+        when: "PF徹底レビュー・徹底調査・週次routine 実行時"
+        note: "KIK-734: 自然言語制約ではなくコード強制。fail で SanityGateError"
 
   watchlist:
     source: tools/watchlist.py

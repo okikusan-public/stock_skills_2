@@ -1,17 +1,20 @@
-"""Gemini Deep Research API wrapper (KIK-731).
+"""Gemini Deep Research API wrapper (KIK-731 / KIK-733).
 
-Provides single-shot DeepResearch task invocation with:
-- Cost guards: estimated cost before execution, monthly budget check
+Single-shot DeepResearch task invocation with:
+- Cost guards: estimated cost before execution
 - Wall-time guard: 30 min hard cancel
 - Hard cap: 1 task per call (no recursion)
 - Meta logging: appends one record per call to data/logs/deepthink_meta.jsonl
 - Disable switch: DEEPTHINK_DR_ENABLED=off bypasses execution
 
+KIK-733: API contract corrected.
+- Endpoint: POST /v1beta/interactions  (NOT generateContent — DR model only supports Interactions API)
+- Required body: {"agent": "<dr-model>", "input": [{"role":"user","content":<theme>}], "background": true}
+- Polling: GET /v1beta/interactions/{id}  (NOT operations/*)
+- Response: outputs[].content[].text + outputs[].annotations[].url
+
 Important: This is a tool, not an agent. The caller (DeepThink Step 3)
 decides when to invoke based on config/tools.yaml `when`/`strength`/`not_for`.
-
-API: POST https://generativelanguage.googleapis.com/v1beta/{model}:generateContent
-Model: deep-research-preview-04-2026 (Google Deep Research)
 """
 
 from __future__ import annotations
@@ -62,21 +65,7 @@ def gemini_deep_research(
     timeout_sec: int = _DEFAULT_TIMEOUT_SEC,
     model: str = _DEFAULT_MODEL,
 ) -> dict[str, Any]:
-    """Run a single Gemini Deep Research task.
-
-    Parameters
-    ----------
-    theme : str
-        Research theme (e.g. "AI半導体 2026 市場動向").
-    depth : str
-        "light" / "medium" / "deep". Affects estimated cost only; DR API
-        decides actual search depth internally.
-    budget_usd : float
-        Per-call hard cap. Returned status="budget_exceeded" if estimate > budget_usd.
-    timeout_sec : int
-        Wall-time hard cancel (default 1800s = 30 min).
-    model : str
-        DR model name (default deep-research-preview-04-2026).
+    """Run a single Gemini Deep Research task via /v1beta/interactions.
 
     Returns
     -------
@@ -87,11 +76,11 @@ def gemini_deep_research(
         duration_sec  : float
         status        : "ok" | "budget_exceeded" | "disabled" | "no_api_key" | "timeout" | "error"
         error_message : str | None
+        interaction_id : str | None  # KIK-733: the long-running interaction id
     """
     started_at = time.time()
     estimate = _DEPTH_COST_USD.get(depth, _DEPTH_COST_USD["medium"])
 
-    # Kill-switch
     if not is_deep_research_enabled():
         return _make_result(
             theme, depth, estimate, started_at,
@@ -99,7 +88,6 @@ def gemini_deep_research(
             error_message="DEEPTHINK_DR_ENABLED=off",
         )
 
-    # Per-call budget guard
     if estimate > budget_usd:
         return _make_result(
             theme, depth, estimate, started_at,
@@ -115,14 +103,16 @@ def gemini_deep_research(
             error_message="GEMINI_API_KEY not set",
         )
 
-    # Submit DR task and poll until done or wall-time exceeded.
     try:
-        text, sources = _run_deep_research(api_key, model, theme, depth, timeout_sec)
-    except _DRTimeout:
+        text, sources, interaction_id = _run_deep_research(
+            api_key, model, theme, timeout_sec,
+        )
+    except _DRTimeout as exc:
         return _make_result(
             theme, depth, estimate, started_at,
             status="timeout",
             error_message=f"wall_time exceeded {timeout_sec}s",
+            interaction_id=getattr(exc, "interaction_id", None),
         )
     except (requests.RequestException, KeyError, ValueError) as exc:
         return _make_result(
@@ -136,6 +126,7 @@ def gemini_deep_research(
         status="ok",
         text=text,
         sources=sources,
+        interaction_id=interaction_id,
     )
 
 
@@ -145,60 +136,111 @@ def gemini_deep_research(
 
 
 class _DRTimeout(Exception):
-    pass
+    """Raised when polling exceeds wall_time."""
+
+    def __init__(self, message: str = "", interaction_id: str | None = None):
+        super().__init__(message)
+        self.interaction_id = interaction_id
 
 
 def _run_deep_research(
-    api_key: str, model: str, theme: str, depth: str, timeout_sec: int,
-) -> tuple[str, list[str]]:
-    """Submit DR task and poll for completion. Raises _DRTimeout on wall-time exceed."""
-    url = f"{_API_BASE}/models/{model}:generateContent?key={api_key}"
+    api_key: str, model: str, theme: str, timeout_sec: int,
+) -> tuple[str, list[str], str | None]:
+    """Submit DR interaction and poll until done or wall-time exceed.
+
+    KIK-733: Uses /v1beta/interactions (NOT generateContent).
+    """
+    submit_url = f"{_API_BASE}/interactions?key={api_key}"
     payload = {
-        "contents": [{"parts": [{"text": theme}]}],
-        "tools": [{"google_search": {}}],
-        "generationConfig": {"depth": depth},
+        "agent": model,
+        "input": [{"role": "user", "content": theme}],
+        "background": True,
     }
-    response = requests.post(url, json=payload, timeout=60)
+    response = requests.post(submit_url, json=payload, timeout=60)
     response.raise_for_status()
-    body = response.json()
+    submit_body = response.json()
 
-    # If response has operation name (background task), poll. Otherwise return inline.
-    op_name = body.get("name")
-    if op_name:
-        return _poll_operation(api_key, op_name, timeout_sec)
+    interaction_id = submit_body.get("id")
+    initial_status = submit_body.get("status")
 
-    return _extract_text_and_sources(body)
+    # If already complete inline (rare), extract immediately.
+    if initial_status == "completed":
+        text, sources = _extract_text_and_sources(submit_body)
+        return text, sources, interaction_id
+
+    if not interaction_id:
+        raise ValueError(f"submit response missing 'id': {submit_body}")
+
+    text, sources = _poll_interaction(api_key, interaction_id, timeout_sec)
+    return text, sources, interaction_id
 
 
-def _poll_operation(api_key: str, op_name: str, timeout_sec: int) -> tuple[str, list[str]]:
-    """Poll the long-running operation until done or wall-time exceed."""
+def _poll_interaction(
+    api_key: str, interaction_id: str, timeout_sec: int,
+) -> tuple[str, list[str]]:
+    """Poll the long-running interaction until completed or deadline.
+
+    KIK-733: Uses /v1beta/interactions/{id} (NOT operations/*).
+    """
     deadline = time.time() + timeout_sec
-    poll_url = f"{_API_BASE}/{op_name}?key={api_key}"
+    poll_url = f"{_API_BASE}/interactions/{interaction_id}?key={api_key}"
     while time.time() < deadline:
         time.sleep(_POLL_INTERVAL_SEC)
         r = requests.get(poll_url, timeout=30)
         r.raise_for_status()
         body = r.json()
-        if body.get("done"):
-            return _extract_text_and_sources(body.get("response", body))
-    raise _DRTimeout()
+        status = body.get("status")
+        if status == "completed":
+            return _extract_text_and_sources(body)
+        if status == "failed":
+            raise ValueError(
+                f"interaction failed: {body.get('error') or body.get('status')}"
+            )
+        # status == "in_progress" → keep polling
+    raise _DRTimeout(interaction_id=interaction_id)
 
 
 def _extract_text_and_sources(body: dict) -> tuple[str, list[str]]:
-    """Extract text and citation URLs from Gemini response body."""
-    candidates = body.get("candidates", [])
-    if not candidates:
-        return "", []
-    parts = candidates[0].get("content", {}).get("parts", [])
-    text = "\n".join(p.get("text", "") for p in parts if "text" in p)
-    grounding = candidates[0].get("groundingMetadata", {})
-    chunks = grounding.get("groundingChunks", []) or []
-    sources = []
-    for c in chunks:
-        web = c.get("web", {})
-        uri = web.get("uri")
-        if uri:
-            sources.append(uri)
+    """Extract text and citation URLs from Gemini DR /v1beta/interactions response.
+
+    KIK-733: outputs[].content[].text  +  outputs[].annotations[].url
+
+    Response shape:
+      {
+        "id": "v1_...",
+        "status": "completed",
+        "outputs": [
+          {
+            "type": "text",
+            "content": [{"text": "..."}],
+            "annotations": [{"url": "...", "title": "..."}]
+          },
+          ...
+        ],
+        "usage_metadata": {...}
+      }
+    """
+    outputs = body.get("outputs") or []
+    text_parts: list[str] = []
+    sources: list[str] = []
+    seen_urls: set[str] = set()
+
+    for out in outputs:
+        if not isinstance(out, dict):
+            continue
+        # Text content
+        for c in out.get("content") or []:
+            if isinstance(c, dict) and "text" in c:
+                text_parts.append(c["text"])
+        # Citation annotations
+        for ann in out.get("annotations") or []:
+            if isinstance(ann, dict):
+                url = ann.get("url") or ann.get("uri")
+                if url and url not in seen_urls:
+                    seen_urls.add(url)
+                    sources.append(url)
+
+    text = "\n".join(text_parts)
     return text, sources
 
 
@@ -209,6 +251,7 @@ def _make_result(
     text: str = "",
     sources: list[str] | None = None,
     error_message: str | None = None,
+    interaction_id: str | None = None,
 ) -> dict[str, Any]:
     """Build result dict and append to meta log (best-effort)."""
     duration = time.time() - started_at
@@ -219,6 +262,7 @@ def _make_result(
         "duration_sec": round(duration, 2),
         "status": status,
         "error_message": error_message,
+        "interaction_id": interaction_id,
     }
     _append_meta_log(theme, depth, result)
     return result
@@ -238,9 +282,9 @@ def _append_meta_log(theme: str, depth: str, result: dict) -> None:
             "sources_count": len(result["sources"]),
             "duration_sec": result["duration_sec"],
             "error_message": result.get("error_message"),
+            "interaction_id": result.get("interaction_id"),
         }
         with open(_META_LOG_PATH, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
     except OSError as exc:
-        # Don't fail the call on log write failure.
         print(f"[gemini_dr] meta log write failed: {exc}", file=sys.stderr)

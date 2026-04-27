@@ -69,11 +69,26 @@ portfolio.csv を読み、各銘柄について:
 
 ### 3. PF構造分析
 
-portfolio.csv から比率を計算:
+⚠️ **KIK-734: PF総資産は `tools/portfolio_io.py` の `load_total_assets()` を必ず使う**。
+portfolio.csv 単独では現金が含まれず、Cash% が誤って 0% になる事故が起きた（2026-04-27）。
+推奨生成前に `src/data/sanity_gate.py` の `assert_pf_complete(positions_value_jpy, cash)` を通すこと。
+
+```python
+from tools.portfolio_io import load_total_assets
+from src.data.sanity_gate import assert_pf_complete
+
+assets = load_total_assets()  # {positions, cash, cash_jpy, has_cash}
+positions_value_jpy = sum(...)  # 株式評価額（JPY 換算）
+assert_pf_complete(positions_value_jpy, assets["cash"])
+cash_pct = assets["cash_jpy"] / (positions_value_jpy + assets["cash_jpy"]) * 100
+```
+
+portfolio.csv + cash_balance.json から比率を計算:
 - セクター別比率
 - 地域別比率
 - 通貨別比率
 - 規模別比率（大型/中型/小型）
+- 役割別比率（インカム/グロース/ヘッジ/Cash）← **Cash 必須**
 - HHI（集中度指数）
 
 ### 4. 市況定量
@@ -128,7 +143,8 @@ target ノートが1件以上あれば、サマリー末尾に件数リマイン
 
 ## 使用ツール
 
-`config/tools.yaml` を参照。主に `yahoo_finance.get_stock_info` / `yahoo_finance.get_price_history` / `graphrag.get_context` / `portfolio_io.load_portfolio` を使用。portfolio.csv は直接読み込みも可。
+`config/tools.yaml` を参照。主に `yahoo_finance.get_stock_info` / `yahoo_finance.get_price_history` / `graphrag.get_context` / **`portfolio_io.load_total_assets`（KIK-734、株式+現金合算 SSoT）** を使用。
+**⚠️ `load_portfolio` 単独使用は Cash 0% 事故（2026-04-27）の原因。`load_total_assets` を優先**。
 
 ## テクニカル計算
 

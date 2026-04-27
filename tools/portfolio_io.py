@@ -20,6 +20,10 @@ from src.data.portfolio_io import (  # noqa: E402
     update_next_earnings,
     get_performance_review,
     DEFAULT_CSV_PATH,
+    # KIK-734: PF総資産（株式+現金）の SSoT
+    load_cash_balance,
+    load_total_assets,
+    DEFAULT_CASH_PATH,
 )
 
 __all__ = [
@@ -30,4 +34,8 @@ __all__ = [
     "update_next_earnings",
     "get_performance_review",
     "DEFAULT_CSV_PATH",
+    # KIK-734
+    "load_cash_balance",
+    "load_total_assets",
+    "DEFAULT_CASH_PATH",
 ]
