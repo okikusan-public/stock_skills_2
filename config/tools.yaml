@@ -123,6 +123,17 @@ tools:
         when: "PF徹底レビュー・徹底調査・週次routine 実行時"
         note: "KIK-734: 自然言語制約ではなくコード強制。fail で SanityGateError"
 
+  preflight:
+    source: src/data/preflight.py
+    functions:
+      run_preflight:
+        description: "DeepThink 起動前/Step5前のゲート（cash_balance / conviction / lot_size を一括検証）"
+        when: "DeepThink Step 0 と Step 5 直前（必須）。PF系テーマでは domain='pf'"
+        note: "KIK-735: sanity_gate のラッパー。conviction は data/notes/thesis から自動抽出"
+      extract_convictions:
+        description: "thesis ノートから conviction 銘柄リストを抽出"
+        when: "Strategist/Reviewer 起動時に conviction 注入用に取得"
+
   watchlist:
     source: tools/watchlist.py
     functions:

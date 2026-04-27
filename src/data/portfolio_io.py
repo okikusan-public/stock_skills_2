@@ -109,8 +109,11 @@ DEFAULT_CASH_PATH = os.path.join(
 )
 
 
-def load_cash_balance(cash_path: str = DEFAULT_CASH_PATH) -> dict:
+def load_cash_balance(cash_path: str | None = None) -> dict:
     """KIK-734: cash_balance.json を読み込む（PF総資産計算で必須）.
+
+    KIK-735: cash_path=None で `DEFAULT_CASH_PATH` を遅延参照する
+    （test の monkeypatch を効かせるため）。
 
     Returns
     -------
@@ -119,6 +122,8 @@ def load_cash_balance(cash_path: str = DEFAULT_CASH_PATH) -> dict:
         ファイルが存在しない場合は空 dict を返す。
     """
     import json
+    if cash_path is None:
+        cash_path = DEFAULT_CASH_PATH
     cash_path = os.path.normpath(cash_path)
     if not os.path.exists(cash_path):
         return {}
@@ -127,8 +132,8 @@ def load_cash_balance(cash_path: str = DEFAULT_CASH_PATH) -> dict:
 
 
 def load_total_assets(
-    csv_path: str = DEFAULT_CSV_PATH,
-    cash_path: str = DEFAULT_CASH_PATH,
+    csv_path: str | None = None,
+    cash_path: str | None = None,
 ) -> dict:
     """KIK-734: PF総資産（株式 + 現金）を取得する SSoT 関数.
 
@@ -145,6 +150,11 @@ def load_total_assets(
             "has_cash": bool,          # cash_balance.json が読めたか
         }
     """
+    # KIK-735: dynamic default lookup so monkeypatching takes effect
+    if csv_path is None:
+        csv_path = DEFAULT_CSV_PATH
+    if cash_path is None:
+        cash_path = DEFAULT_CASH_PATH
     positions = load_portfolio(csv_path)
     cash = load_cash_balance(cash_path)
     # KIK-734 review: has_cash は total_jpy が取れた時のみ True にする。

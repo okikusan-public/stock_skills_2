@@ -78,7 +78,7 @@ class TestFormatSummary:
             {"tool": "gemini_deep_research", "cost_usd": 42.0, "status": "ok"},
         ])
         out = ds.format_summary("2026-04", s, 50.0)
-        assert "⚠" in out
+        assert "月予算 80% 到達" in out
 
     def test_includes_per_tool_lines(self):
         s = ds.summarize([
@@ -88,3 +88,54 @@ class TestFormatSummary:
         out = ds.format_summary("2026-04", s, 50.0)
         assert "gemini_deep_research" in out
         assert "bulk_x_search" in out
+
+
+class TestActualCostDivergence:
+    """KIK-737: estimate vs actual cost reporting."""
+
+    def test_summarize_aggregates_actual_cost(self):
+        records = [
+            {"tool": "gemini_deep_research", "cost_usd": 2.5,
+             "actual_cost_usd": 3.0, "status": "ok"},
+            {"tool": "gemini_deep_research", "cost_usd": 2.5,
+             "actual_cost_usd": 2.8, "status": "ok"},
+        ]
+        s = ds.summarize(records)
+        assert s["total_actual_cost_usd"] == 5.8
+        assert s["by_tool"]["gemini_deep_research"]["actual_cost_usd"] == 5.8
+
+    def test_no_actual_cost_total_zero(self):
+        records = [
+            {"tool": "bulk_x_search", "cost_usd": 0.5, "status": "ok"},
+        ]
+        s = ds.summarize(records)
+        assert s["total_actual_cost_usd"] == 0.0
+
+    def test_warns_when_divergence_over_20pct(self):
+        # Estimate $5.0 vs actual $7.0 → 40% divergence (under-estimate)
+        s = ds.summarize([
+            {"tool": "gemini_deep_research", "cost_usd": 5.0,
+             "actual_cost_usd": 7.0, "status": "ok"},
+        ])
+        out = ds.format_summary("2026-04", s, 50.0)
+        assert "再校正" in out
+        assert "過小" in out
+
+    def test_warns_when_estimate_too_high(self):
+        # Estimate $10 vs actual $5 → 50% divergence (over-estimate)
+        s = ds.summarize([
+            {"tool": "gemini_deep_research", "cost_usd": 10.0,
+             "actual_cost_usd": 5.0, "status": "ok"},
+        ])
+        out = ds.format_summary("2026-04", s, 50.0)
+        assert "再校正" in out
+        assert "過大" in out
+
+    def test_no_warning_within_20pct(self):
+        # Estimate $5.0 vs actual $5.5 → 10% divergence (acceptable)
+        s = ds.summarize([
+            {"tool": "gemini_deep_research", "cost_usd": 5.0,
+             "actual_cost_usd": 5.5, "status": "ok"},
+        ])
+        out = ds.format_summary("2026-04", s, 50.0)
+        assert "再校正" not in out

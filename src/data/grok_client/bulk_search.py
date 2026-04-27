@@ -37,10 +37,17 @@ _DEFAULT_TIMEOUT_PER_CALL = 30
 _COST_PER_CALL_USD = 0.5
 
 
+def is_dry_run() -> bool:
+    """KIK-737: True if DEEPTHINK_DRY_RUN=1."""
+    import os
+    return os.environ.get("DEEPTHINK_DRY_RUN", "").lower() in ("1", "on", "true")
+
+
 def bulk_x_search(
     queries: list[str],
     max_sources_per_call: int = 10,
     timeout_sec: int = _DEFAULT_TIMEOUT_PER_CALL,
+    dry_run: bool = False,
 ) -> dict[str, Any]:
     """Run multiple Grok x_search queries sequentially.
 
@@ -67,6 +74,7 @@ def bulk_x_search(
         tool_label="bulk_x_search",
         max_sources_per_call=max_sources_per_call,
         timeout_sec=timeout_sec,
+        dry_run=dry_run,
     )
 
 
@@ -75,6 +83,7 @@ def bulk_web_search(
     allowed_domains: list[str] | None = None,
     max_sources_per_call: int = 10,
     timeout_sec: int = _DEFAULT_TIMEOUT_PER_CALL,
+    dry_run: bool = False,
 ) -> dict[str, Any]:
     """Run multiple Grok web_search queries sequentially.
 
@@ -98,6 +107,7 @@ def bulk_web_search(
         tool_label="bulk_web_search",
         max_sources_per_call=max_sources_per_call,
         timeout_sec=timeout_sec,
+        dry_run=dry_run,
     )
 
 
@@ -112,9 +122,23 @@ def _bulk_search(
     tools: list[dict],
     tool_label: str,
     max_sources_per_call: int,
+    dry_run: bool = False,
     timeout_sec: int,
 ) -> dict[str, Any]:
     started_at = time.time()
+
+    # KIK-737: dry_run（個別引数 OR 環境変数）→ API 不要、estimate のみ返す
+    if dry_run or is_dry_run():
+        dry_results = [
+            {"query": q, "text": "", "sources": [], "status": "dry_run"}
+            for q in queries
+        ]
+        return _make_bulk_result(
+            queries, dry_results, tool_label, started_at,
+            successful=0, error="dry_run=True (no API call)",
+            dry_run=True,
+        )
+
     api_key = _get_api_key()
     if not api_key:
         return _make_bulk_result(
@@ -201,16 +225,21 @@ def _extract_sources(body: dict) -> list[str]:
 def _make_bulk_result(
     queries: list[str], results: list[dict], tool_label: str, started_at: float,
     *, successful: int = 0, error: str | None = None,
+    dry_run: bool = False,
 ) -> dict[str, Any]:
     duration = time.time() - started_at
     total_cost = round(_COST_PER_CALL_USD * successful, 3)
+    # KIK-737: estimate_cost_usd はクエリ数 × per-call で計算（dry_run でも返す）
+    estimate_cost = round(_COST_PER_CALL_USD * len(queries), 3)
     out = {
         "results": results,
         "total_cost_usd": total_cost,
+        "estimate_cost_usd": estimate_cost,
         "total_calls": len(queries),
         "successful_calls": successful,
         "duration_sec": round(duration, 2),
         "error": error,
+        "dry_run": dry_run,
     }
     _append_meta_log(tool_label, queries, out)
     return out
