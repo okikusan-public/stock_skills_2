@@ -88,7 +88,11 @@ def _load_recent_notes(base_dir: Path, window_days: int) -> list[dict]:
 
 
 def _load_recent_trades(base_dir: Path, window_days: int) -> list[str]:
-    """Return trade JSON filenames whose `trade_date` is within window_days."""
+    """Return trade JSON filenames whose `date` (or legacy `trade_date`) is within window_days.
+
+    KIK-742: save_trade.py は `"date"` キーで保存するが、過去には `trade_date` も
+    使われていた。両方をフォールバックして読む。
+    """
     trade_dir = base_dir / "data" / "history" / "trade"
     if not trade_dir.exists():
         return []
@@ -99,7 +103,8 @@ def _load_recent_trades(base_dir: Path, window_days: int) -> list[str]:
             rec = json.loads(fp.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             continue
-        d = _parse_iso_date(rec.get("trade_date"))
+        # KIK-742: date が正、trade_date は legacy フォールバック
+        d = _parse_iso_date(rec.get("date") or rec.get("trade_date"))
         if d is not None and d >= cutoff:
             recent.append(fp.name)
     return recent

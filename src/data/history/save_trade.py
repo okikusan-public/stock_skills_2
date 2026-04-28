@@ -46,9 +46,12 @@ def save_trade(
         取得単価（KIK-441）。sell 時に保存。
     """
     today = date.today().isoformat()
-    now = datetime.now().isoformat(timespec="seconds")
+    now_dt = datetime.now()
+    now = now_dt.isoformat(timespec="seconds")
+    # KIK-742: timestamp秒（HHMMSS）でファイル名を一意化（同日同銘柄同タイプの上書き防止）
+    ts_suffix = now_dt.strftime("%H%M%S")
     identifier = f"{trade_type}_{_safe_filename(symbol)}"
-    filename = f"{today}_{identifier}.json"
+    filename = f"{today}_{identifier}_{ts_suffix}.json"
 
     payload: dict = {
         "category": "trade",

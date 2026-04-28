@@ -226,7 +226,18 @@ def add_position(
     -------
     dict
         更新後のポジション dict
+
+    Raises
+    ------
+    ValueError
+        shares <= 0 または cost_price <= 0 の場合（KIK-742）。
     """
+    # KIK-742: 入力バリデーション（負数・ゼロを拒否してPF破壊を防ぐ）
+    if not isinstance(shares, (int, float)) or shares <= 0:
+        raise ValueError(f"shares must be > 0, got {shares!r}")
+    if not isinstance(cost_price, (int, float)) or cost_price <= 0:
+        raise ValueError(f"cost_price must be > 0, got {cost_price!r}")
+
     if purchase_date is None:
         purchase_date = datetime.now().strftime("%Y-%m-%d")
 
@@ -303,8 +314,17 @@ def sell_position(
     Raises
     ------
     ValueError
-        銘柄が見つからない場合、または保有数を超える売却の場合
+        銘柄が見つからない場合、保有数を超える売却の場合、
+        または shares/sell_price が <= 0 の場合（KIK-742）。
     """
+    # KIK-742: 入力バリデーション（負数・ゼロを拒否してPF破壊を防ぐ）
+    if not isinstance(shares, (int, float)) or shares <= 0:
+        raise ValueError(f"shares must be > 0, got {shares!r}")
+    if sell_price is not None and (
+        not isinstance(sell_price, (int, float)) or sell_price <= 0
+    ):
+        raise ValueError(f"sell_price must be > 0 if provided, got {sell_price!r}")
+
     portfolio = load_portfolio(csv_path)
 
     target_idx = None

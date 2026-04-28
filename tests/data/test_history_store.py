@@ -222,16 +222,26 @@ class TestSaveTrade:
         assert data["shares"] == 5
 
     def test_save_file_naming(self, tmp_path):
+        # KIK-742: ファイル名末尾に HHMMSS が付与される（衝突防止）
         path = save_trade("7203.T", "buy", 100, 2850.0, "JPY", "2026-02-14", base_dir=str(tmp_path))
         filename = Path(path).name
         today = date.today().isoformat()
-        assert filename == f"{today}_buy_7203_T.json"
+        # 形式: {today}_buy_7203_T_{HHMMSS}.json
+        assert filename.startswith(f"{today}_buy_7203_T_")
+        assert filename.endswith(".json")
+        suffix = filename[len(f"{today}_buy_7203_T_"):-len(".json")]
+        assert len(suffix) == 6 and suffix.isdigit()
 
     def test_save_sell_file_naming(self, tmp_path):
+        # KIK-742: ファイル名末尾に HHMMSS が付与される（衝突防止）
         path = save_trade("AAPL", "sell", 5, 180.0, "USD", "2026-02-14", base_dir=str(tmp_path))
         filename = Path(path).name
         today = date.today().isoformat()
-        assert filename == f"{today}_sell_AAPL.json"
+        # 形式: {today}_sell_AAPL_{HHMMSS}.json
+        assert filename.startswith(f"{today}_sell_AAPL_")
+        assert filename.endswith(".json")
+        suffix = filename[len(f"{today}_sell_AAPL_"):-len(".json")]
+        assert len(suffix) == 6 and suffix.isdigit()
 
     def test_save_with_memo(self, tmp_path):
         path = save_trade("7203.T", "buy", 100, 2850.0, "JPY", "2026-02-14", memo="割安でエントリー", base_dir=str(tmp_path))
