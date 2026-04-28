@@ -57,6 +57,17 @@ def get_mode() -> str:
     return _get_mode()
 
 
+def reset_mode_cache() -> None:
+    """Reset the mode cache (KIK-743).
+
+    Useful in tests where ``is_available`` is monkey-patched between cases —
+    without resetting, the 30s TTL leaks the previous test's mode value into
+    the next test.
+    """
+    global _mode_cache
+    _mode_cache = ("", 0.0)
+
+
 def _get_driver():
     """Lazy-init Neo4j driver. Returns None if neo4j package not installed."""
     global _driver

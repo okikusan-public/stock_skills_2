@@ -39,7 +39,11 @@ _WATCHLIST_DIR = "data/watchlists"  # relative; resolved at call time
 
 
 def _is_bookmarked_local(symbol: str) -> bool:
-    """Check watchlist membership from data/watchlists/*.json (Neo4j-free)."""
+    """Check watchlist membership from data/watchlists/*.json (Neo4j-free).
+
+    KIK-743: tools/watchlist.py:save_watchlist は list 形式（["AAPL", ...]）で
+    保存するため、list / dict {symbols: [...]} 両形式に対応する。
+    """
     wl_dir = Path(_WATCHLIST_DIR)
     if not wl_dir.exists():
         return False
@@ -48,13 +52,20 @@ def _is_bookmarked_local(symbol: str) -> bool:
         try:
             with open(fp, encoding="utf-8") as f:
                 data = json.load(f)
-            symbols = data.get("symbols") if isinstance(data, dict) else None
-            if symbols and any(
-                (s or "").upper() == sym_upper for s in symbols
-            ):
-                return True
         except (json.JSONDecodeError, OSError):
             continue
+        # KIK-743: list 直保存形式（tools/watchlist.py の標準形式）
+        if isinstance(data, list):
+            symbols = data
+        elif isinstance(data, dict):
+            # legacy: {"symbols": [...]} 形式
+            symbols = data.get("symbols")
+        else:
+            symbols = None
+        if symbols and any(
+            (s or "").upper() == sym_upper for s in symbols if isinstance(s, str)
+        ):
+            return True
     return False
 
 

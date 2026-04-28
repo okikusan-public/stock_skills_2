@@ -106,9 +106,12 @@ def save_research(
         Absolute path of the saved file.
     """
     today = date.today().isoformat()
-    now = datetime.now().isoformat(timespec="seconds")
+    now_dt = datetime.now()
+    now = now_dt.isoformat(timespec="seconds")
+    # KIK-743: HHMMSS で一意化（同日同research_type/target の上書き防止）
+    ts_suffix = now_dt.strftime("%H%M%S")
     identifier = f"{_safe_filename(research_type)}_{_safe_filename(target)}"
-    filename = f"{today}_{identifier}.json"
+    filename = f"{today}_{identifier}_{ts_suffix}.json"
 
     payload = {
         "category": "research",
@@ -183,8 +186,11 @@ def save_market_context(
         Absolute path of the saved file.
     """
     today = date.today().isoformat()
-    now = datetime.now().isoformat(timespec="seconds")
-    filename = f"{today}_context.json"
+    now_dt = datetime.now()
+    now = now_dt.isoformat(timespec="seconds")
+    # KIK-743: HHMMSS で一意化（同日同context の上書き防止）
+    ts_suffix = now_dt.strftime("%H%M%S")
+    filename = f"{today}_context_{ts_suffix}.json"
 
     payload = {
         "category": "market_context",

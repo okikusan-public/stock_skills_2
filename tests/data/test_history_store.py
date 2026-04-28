@@ -113,10 +113,12 @@ class TestSaveScreening:
         assert Path(path).exists()
 
     def test_save_file_naming(self, tmp_path):
+        # KIK-743: HHMMSS 一意化（同日同region/preset の上書き防止）
         path = save_screening("value", "japan", _sample_results(), base_dir=str(tmp_path))
         filename = Path(path).name
         today = date.today().isoformat()
-        assert filename == f"{today}_japan_value.json"
+        assert filename.startswith(f"{today}_japan_value_")
+        assert filename.endswith(".json")
 
     def test_save_contains_metadata(self, tmp_path):
         path = save_screening("value", "japan", _sample_results(), base_dir=str(tmp_path))
@@ -178,10 +180,12 @@ class TestSaveReport:
         assert Path(path).exists()
 
     def test_save_file_naming(self, tmp_path):
+        # KIK-743: HHMMSS 一意化（同日同銘柄の上書き防止）
         path = save_report("7203.T", _sample_stock_data(), 72.5, "割安", base_dir=str(tmp_path))
         filename = Path(path).name
         today = date.today().isoformat()
-        assert filename == f"{today}_7203_T.json"
+        assert filename.startswith(f"{today}_7203_T_")
+        assert filename.endswith(".json")
 
     def test_save_contains_score_and_verdict(self, tmp_path):
         path = save_report("7203.T", _sample_stock_data(), 72.5, "割安（買い検討）", base_dir=str(tmp_path))
@@ -290,10 +294,12 @@ class TestSaveHealth:
         assert Path(path).exists()
 
     def test_save_file_naming(self, tmp_path):
+        # KIK-743: HHMMSS 一意化（同日health の上書き防止）
         path = save_health(_sample_health_data(), base_dir=str(tmp_path))
         filename = Path(path).name
         today = date.today().isoformat()
-        assert filename == f"{today}_health.json"
+        assert filename.startswith(f"{today}_health_")
+        assert filename.endswith(".json")
 
     def test_save_contains_summary(self, tmp_path):
         path = save_health(_sample_health_data(), base_dir=str(tmp_path))
@@ -612,11 +618,13 @@ class TestSaveMarketContext:
         assert data["_saved_at"] is not None
 
     def test_filename_format(self, tmp_path):
+        # KIK-743: HHMMSS 一意化（同日context の上書き防止）
         context = {"indices": []}
         path = save_market_context(context, base_dir=str(tmp_path))
         fname = Path(path).name
         today = date.today().isoformat()
-        assert fname == f"{today}_context.json"
+        assert fname.startswith(f"{today}_context_")
+        assert fname.endswith(".json")
 
     def test_load_market_context(self, tmp_path):
         context = {"indices": [{"name": "VIX", "price": 20.0}]}

@@ -19,8 +19,11 @@ def save_health(
     Returns the absolute path of the saved file.
     """
     today = date.today().isoformat()
-    now = datetime.now().isoformat(timespec="seconds")
-    filename = f"{today}_health.json"
+    now_dt = datetime.now()
+    now = now_dt.isoformat(timespec="seconds")
+    # KIK-743: HHMMSS で一意化（同日同health の上書き防止）
+    ts_suffix = now_dt.strftime("%H%M%S")
+    filename = f"{today}_health_{ts_suffix}.json"
 
     positions_out = []
     for pos in health_data.get("positions", []):

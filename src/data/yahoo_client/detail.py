@@ -288,6 +288,10 @@ def get_stock_detail(symbol: str) -> Optional[dict]:
         dividend_paid: Optional[float] = None
         stock_repurchase: Optional[float] = None
         depreciation: Optional[float] = None  # KIK-708
+        # KIK-743: try ブロック外で初期化（API失敗時の未定義参照回避）
+        dividend_paid_history: list[float] = []
+        stock_repurchase_history: list[float] = []
+        cashflow_fiscal_years: list[int] = []
         try:
             cf = ticker.cashflow
             operating_cashflow = _try_get_field(cf, [
@@ -323,9 +327,7 @@ def get_stock_detail(symbol: str) -> Optional[dict]:
                     stock_repurchase = net_issuance
 
             # KIK-380: Shareholder return 3-year history
-            dividend_paid_history: list[float] = []
-            stock_repurchase_history: list[float] = []
-            cashflow_fiscal_years: list[int] = []
+            # （初期化は try ブロック前に移動済み: KIK-743）
             div_field_names = [
                 "Common Stock Dividend Paid",
                 "Cash Dividends Paid",
@@ -447,6 +449,12 @@ def get_stock_detail(symbol: str) -> Optional[dict]:
         number_of_analyst_opinions: Optional[int] = None
         recommendation_mean: Optional[float] = None
         forward_eps: Optional[float] = None
+        # KIK-743: ETF系変数を try ブロック外で初期化（info取得失敗時の未定義参照回避）
+        expense_ratio: Optional[float] = None
+        total_assets_fund: Optional[float] = None
+        fund_category: Optional[str] = None
+        fund_family: Optional[str] = None
+        quote_type: Optional[str] = None
         try:
             info = ticker.info
             total_debt = _safe_get(info, "totalDebt")
@@ -459,11 +467,11 @@ def get_stock_detail(symbol: str) -> Optional[dict]:
             recommendation_mean = _safe_get(info, "recommendationMean")
             forward_eps = _safe_get(info, "forwardEps")
             # ETF-specific fields (KIK-469)
-            expense_ratio: Optional[float] = _safe_get(info, "annualReportExpenseRatio")
-            total_assets_fund: Optional[float] = _safe_get(info, "totalAssets")  # AUM
-            fund_category: Optional[str] = _safe_get(info, "category")
-            fund_family: Optional[str] = _safe_get(info, "fundFamily")
-            quote_type: Optional[str] = _safe_get(info, "quoteType")
+            expense_ratio = _safe_get(info, "annualReportExpenseRatio")
+            total_assets_fund = _safe_get(info, "totalAssets")  # AUM
+            fund_category = _safe_get(info, "category")
+            fund_family = _safe_get(info, "fundFamily")
+            quote_type = _safe_get(info, "quoteType")
         except Exception:
             pass
 
