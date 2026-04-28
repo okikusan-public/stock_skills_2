@@ -327,10 +327,23 @@ class TestIdGeneration:
         assert kwargs["id"] == "report_2025-01-15_7203.T"
 
     def test_trade_id_format(self, gs_with_driver):
+        # KIK-744: 同日同銘柄取引の衝突防止のため、shares/price 等を含む
+        # 8桁fingerprint suffix が付与される。
         gs, _, session = gs_with_driver
         gs.merge_trade("2025-01-15", "buy", "7203.T", 100, 2850, "JPY")
         kwargs = session.run.call_args_list[0][1]
-        assert kwargs["id"] == "trade_2025-01-15_buy_7203.T"
+        assert kwargs["id"].startswith("trade_2025-01-15_buy_7203.T_")
+        suffix = kwargs["id"][len("trade_2025-01-15_buy_7203.T_"):]
+        assert len(suffix) == 8 and all(c in "0123456789abcdef" for c in suffix)
+
+    def test_trade_id_distinct_for_same_day_different_shares(self, gs_with_driver):
+        """KIK-744: 同日同銘柄でも shares/price が違えば trade_id が異なる."""
+        gs, _, session = gs_with_driver
+        gs.merge_trade("2025-01-15", "buy", "7203.T", 100, 2850, "JPY")
+        gs.merge_trade("2025-01-15", "buy", "7203.T", 50, 2900, "JPY")
+        ids = [call[1]["id"] for call in session.run.call_args_list
+               if "id" in call[1] and call[1]["id"].startswith("trade_")]
+        assert len(set(ids)) == 2, f"trade_ids must differ: {ids}"
 
     def test_health_id_format(self, gs_with_driver):
         gs, _, session = gs_with_driver

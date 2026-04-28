@@ -5,6 +5,8 @@ Contains serialization helpers, embedding builder, and dual-write helper.
 
 import json
 import logging
+import uuid
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -26,6 +28,25 @@ def _history_dir(category: str, base_dir: str) -> Path:
     d = Path(base_dir) / category
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+def _unique_suffix(now_dt: datetime | None = None) -> str:
+    """Return HHMMSS%f + 6char uuid suffix (KIK-744).
+
+    Format: ``HHMMSSffffff_<6hex>`` — guarantees uniqueness even when called
+    multiple times within the same microsecond by appending a uuid4 prefix.
+
+    Examples
+    --------
+    >>> s = _unique_suffix()
+    >>> len(s) == 19  # 12 + 1 + 6
+    True
+    """
+    if now_dt is None:
+        now_dt = datetime.now()
+    ts = now_dt.strftime("%H%M%S%f")  # 12 chars (HHMMSS + microseconds)
+    rand = uuid.uuid4().hex[:6]
+    return f"{ts}_{rand}"
 
 
 class _HistoryEncoder(json.JSONEncoder):

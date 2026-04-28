@@ -9,6 +9,7 @@ from src.data.history._helpers import (
     _history_dir,
     _sanitize,
     _dual_write_graph,
+    _unique_suffix,
 )
 
 
@@ -48,8 +49,8 @@ def save_trade(
     today = date.today().isoformat()
     now_dt = datetime.now()
     now = now_dt.isoformat(timespec="seconds")
-    # KIK-742: timestamp秒（HHMMSS）でファイル名を一意化（同日同銘柄同タイプの上書き防止）
-    ts_suffix = now_dt.strftime("%H%M%S")
+    # KIK-744: HHMMSSffffff + uuid hex で完全一意化（同秒2回呼びでも衝突しない）
+    ts_suffix = _unique_suffix(now_dt)
     identifier = f"{trade_type}_{_safe_filename(symbol)}"
     filename = f"{today}_{identifier}_{ts_suffix}.json"
 

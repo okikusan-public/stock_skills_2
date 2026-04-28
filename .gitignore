@@ -1,4 +1,9 @@
+# Personal/private data (KIK-744: explicit exclusion list)
+# data/ 配下は基本的に個人データなので除外。
+# 将来追加するファイルは明示的に !data/<path> でホワイトリスト化する。
 data/
+!data/.gitkeep
+
 __pycache__/
 *.pyc
 .venv/
@@ -9,6 +14,12 @@ __pycache__/
 .claude/settings.local.json
 data/models/
 articles/
-config/
 .DS_Store
 .mcp.json
+
+# config/ — リポ追跡対象を明示（KIK-744）
+# config/ 全体を除外していたが、実際には scoring/allocation/etf_universe 等の
+# 共有設定はコミット対象。data ディレクトリと違って機密情報は持たない想定。
+# 機密 config を追加する場合は config/secrets/ などに分離して個別除外する。
+config/secrets/
+config/*.local.yaml

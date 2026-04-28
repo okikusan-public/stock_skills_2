@@ -18,14 +18,34 @@ def merge_trade(
     sell_price: float | None = None,
     realized_pnl: float | None = None,
     hold_days: int | None = None,
+    trade_id: str | None = None,
 ) -> bool:
-    """Create a Trade node and BOUGHT/SOLD relationship."""
+    """Create a Trade node and BOUGHT/SOLD relationship.
+
+    Parameters
+    ----------
+    trade_id : str, optional
+        Stable unique id (KIK-744). If omitted, a fingerprint over
+        (date, type, symbol, shares, price, hold_days, sell_price) plus a
+        4-char suffix is generated to prevent same-day same-symbol collisions.
+    """
     if _common._get_mode() == "off":
         return False
     driver = _common._get_driver()
     if driver is None:
         return False
-    trade_id = f"trade_{trade_date}_{trade_type}_{symbol}"
+    if trade_id is None:
+        # KIK-744: 同日同銘柄取引が潰れないよう、識別子に shares/price/sell_price/
+        # hold_days と短いハッシュを混ぜる。同じ取引を再 sync する場合でも
+        # 同じ id が出るよう deterministic にする（hash ではなく構成情報）。
+        import hashlib
+        fp_src = "|".join([
+            str(trade_date), str(trade_type), str(symbol),
+            str(shares), str(price),
+            str(sell_price), str(hold_days),
+        ])
+        fp = hashlib.sha1(fp_src.encode("utf-8")).hexdigest()[:8]
+        trade_id = f"trade_{trade_date}_{trade_type}_{symbol}_{fp}"
     rel_type = "BOUGHT" if trade_type == "buy" else "SOLD"
     try:
         with driver.session() as session:

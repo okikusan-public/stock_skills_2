@@ -8,6 +8,7 @@ from src.data.history._helpers import (
     _history_dir,
     _sanitize,
     _dual_write_graph,
+    _unique_suffix,
 )
 
 
@@ -27,9 +28,12 @@ def save_stress_test(
     Returns the absolute path of the saved file.
     """
     today = date.today().isoformat()
-    now = datetime.now().isoformat(timespec="seconds")
+    now_dt = datetime.now()
+    now = now_dt.isoformat(timespec="seconds")
+    # KIK-744: HHMMSSffffff + uuid hex で完全一意化
+    ts_suffix = _unique_suffix(now_dt)
     identifier = _safe_filename(scenario)
-    filename = f"{today}_{identifier}.json"
+    filename = f"{today}_{identifier}_{ts_suffix}.json"
 
     payload = {
         "category": "stress_test",
@@ -93,8 +97,11 @@ def save_forecast(
     Returns the absolute path of the saved file.
     """
     today = date.today().isoformat()
-    now = datetime.now().isoformat(timespec="seconds")
-    filename = f"{today}_forecast.json"
+    now_dt = datetime.now()
+    now = now_dt.isoformat(timespec="seconds")
+    # KIK-744: HHMMSSffffff + uuid hex で完全一意化
+    ts_suffix = _unique_suffix(now_dt)
+    filename = f"{today}_forecast_{ts_suffix}.json"
 
     # Extract portfolio-level 3-scenario returns from positions
     symbols = [p.get("symbol", "") for p in positions if p.get("symbol")]

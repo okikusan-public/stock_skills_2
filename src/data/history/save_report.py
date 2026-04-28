@@ -8,6 +8,7 @@ from src.data.history._helpers import (
     _history_dir,
     _sanitize,
     _dual_write_graph,
+    _unique_suffix,
 )
 
 
@@ -25,8 +26,8 @@ def save_report(
     today = date.today().isoformat()
     now_dt = datetime.now()
     now = now_dt.isoformat(timespec="seconds")
-    # KIK-743: HHMMSS で一意化（同日同銘柄の上書き防止）
-    ts_suffix = now_dt.strftime("%H%M%S")
+    # KIK-744: HHMMSSffffff + uuid hex で完全一意化
+    ts_suffix = _unique_suffix(now_dt)
     identifier = _safe_filename(symbol)
     filename = f"{today}_{identifier}_{ts_suffix}.json"
 
