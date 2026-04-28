@@ -1,6 +1,6 @@
 ---
 name: stock-skills
-description: 投資アシスタント。自然言語の意図を判定し、7エージェント(screener/analyst/health-checker/researcher/strategist/risk-assessor/reviewer)に振り分ける。
+description: 投資アシスタント。「おはよう」「朝」「今日」「現状」「PF」「保有」「現金」など session-start / portfolio 系キーワードを含むユーザー発話で必ず起動。スクリーニング・分析・投資判断（売買/入替/リバランス）の意図も自動判定し、7エージェント(screener/analyst/health-checker/researcher/strategist/risk-assessor/reviewer)に振り分ける。session-start 時は reconcile_session_state() の hard gate を踏む。
 user_invocable: true
 ---
 

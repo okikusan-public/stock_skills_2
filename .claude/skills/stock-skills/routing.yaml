@@ -12,6 +12,12 @@
 # History Check (KIK-740) フィールド:
 #   history_check: true  → 投資判断時に4LLM並列で過去の歴史的類似事例を自動チェック
 #     詳細は SKILL.md の "History Check" セクション参照
+#
+# Session-Start hard gate (KIK-741) フィールド:
+#   pf_state_required: true  → orchestrator は Agent 起動前に reconcile_session_state() を必ず呼ぶ
+#     morning-summary / routine-daily / routine-weekly / 投資判断・PF/cash/holdings 言及パターンに付与
+#     フラグ未設定でも SKILL.md の安全側キーワード判定 (おはよう/朝/今日/現状/PF 等) で発動する
+#     詳細は SKILL.md の "Session Start State Reconcile" セクションおよび "Hook 順序" 参照
 
 agents:
   screener:
@@ -90,11 +96,13 @@ examples:
     agent: health-checker
     pattern: B
     header: "🎯 [health-checker] PFヘルスチェック"
+    pf_state_required: true
 
   - intent: "ストレステストして"
     agent: health-checker
     pattern: B
     header: "🎯 [health-checker] ストレステスト"
+    pf_state_required: true
 
   # --- Pattern A: ミニマル（1-3行で済む事実照会） ---
   - intent: "VIXは？"
@@ -118,6 +126,7 @@ examples:
     agents: [health-checker, researcher]
     pattern: C
     header: "🎯 [routine-daily] 日次チェック"
+    pf_state_required: true
     note: "detect_alerts→HC(PF)→HC(市況)+researcher並列→ターゲット乖離+WLアラート。3-4分"
 
   - intent: "まとめてチェック"
@@ -125,30 +134,49 @@ examples:
     agents: [health-checker, researcher]
     pattern: C
     header: "🎯 [routine-daily] 日次まとめチェック"
+    pf_state_required: true
 
   - intent: "日次チェック"
     mode: routine-daily
     agents: [health-checker, researcher]
     pattern: C
     header: "🎯 [routine-daily] 日次チェック"
+    pf_state_required: true
 
   - intent: "ルーティン"
     mode: routine-daily
     agents: [health-checker, researcher]
     pattern: C
     header: "🎯 [routine-daily] ルーティン実行"
+    pf_state_required: true
 
   - intent: "おはよう"
     mode: morning-summary
     agent: health-checker
     pattern: A
     header: "🎯 [morning-summary] 朝サマリー"
+    pf_state_required: true
 
   - intent: "朝サマリー"
     mode: morning-summary
     agent: health-checker
     pattern: A
     header: "🎯 [morning-summary] 朝サマリー"
+    pf_state_required: true
+
+  - intent: "今日の状況"
+    mode: morning-summary
+    agent: health-checker
+    pattern: A
+    header: "🎯 [morning-summary] 今日の状況"
+    pf_state_required: true
+
+  - intent: "現状どう？"
+    mode: morning-summary
+    agent: health-checker
+    pattern: A
+    header: "🎯 [morning-summary] 現状確認"
+    pf_state_required: true
 
   # --- 定常業務: 週次 (KIK-724・Pattern C + 自動Reviewer) ---
   - intent: "フルチェック"
@@ -157,6 +185,7 @@ examples:
     pattern: C
     header: "🎯 [routine-weekly] 週次フルチェック"
     review: true
+    pf_state_required: true
     note: "日次+risk-assessor→strategist→条件付きscreener→reviewer。8-13分"
 
   - intent: "週次レビュー"
@@ -165,6 +194,7 @@ examples:
     pattern: C
     header: "🎯 [routine-weekly] 週次レビュー"
     review: true
+    pf_state_required: true
 
   - intent: "しっかり見たい"
     mode: routine-weekly
@@ -172,6 +202,7 @@ examples:
     pattern: C
     header: "🎯 [routine-weekly] 週次レビュー"
     review: true
+    pf_state_required: true
 
   - intent: "最新ニュース教えて"
     agent: researcher
@@ -189,6 +220,7 @@ examples:
     header: "🎯 [strategist] 入替提案"
     review: true
     history_check: true
+    pf_state_required: true
 
   - intent: "プランモードで"
     agents: [health-checker, analyst, researcher, strategist]
@@ -197,6 +229,7 @@ examples:
     progressive: true
     review: true
     history_check: true
+    pf_state_required: true
 
   # --- 複数エージェント連鎖 (Pattern C) ---
   - intent: "今熱いテーマは？"
@@ -230,6 +263,7 @@ examples:
     header: "🎯 [HC → strategist] PF数値確認 → 改善提案"
     review: true
     history_check: true
+    pf_state_required: true
 
   # --- 売却判断（risk-assessor → health-checker → strategist の3連鎖） ---
   - intent: "この株売るべき？"
@@ -239,6 +273,7 @@ examples:
     progressive: true
     review: true
     history_check: true
+    pf_state_required: true
     note: "risk-assessorで市場リスク判定→health-checkerで数値事実→strategistでcheck_exit_rule照合+What-If比較"
 
   - intent: "損切りすべき？"
@@ -248,6 +283,7 @@ examples:
     progressive: true
     review: true
     history_check: true
+    pf_state_required: true
 
   - intent: "利確すべき？"
     agents: [risk-assessor, health-checker, strategist]
@@ -256,6 +292,7 @@ examples:
     progressive: true
     review: true
     history_check: true
+    pf_state_required: true
 
   - intent: "リスク確認して代わりを探して"
     agents: [health-checker, screener]
@@ -263,6 +300,7 @@ examples:
     header: "🎯 [HC → screener] リスク確認 → 代替候補探索"
     review: true
     history_check: true
+    pf_state_required: true
 
   - intent: "半導体を調べて有望な銘柄を探して"
     agents: [researcher, screener]
