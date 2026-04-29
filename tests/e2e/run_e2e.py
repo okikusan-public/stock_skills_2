@@ -2,9 +2,12 @@
 """E2E Test Runner for stock-skills agents.
 
 Usage:
-    python3 tests/e2e/run_e2e.py              # 全シナリオ実行
+    python3 tests/e2e/run_e2e.py              # 全シナリオ実行 (実 API)
     python3 tests/e2e/run_e2e.py e2e_001      # 特定シナリオのみ
     python3 tests/e2e/run_e2e.py e2e_001 e2e_003  # 複数指定
+
+    # KIK-746: routing 検証のみ（LLM/Yahoo Finance 呼ばない、< 1秒）
+    python3 tests/e2e/run_e2e.py --dry-run
 """
 
 import csv
@@ -493,7 +496,72 @@ def run_scenarios(ids: list[str] | None = None):
     return total_fail == 0
 
 
+def run_dry_run() -> bool:
+    """KIK-746: routing 検証のみ（LLM/Yahoo Finance 呼ばない）.
+
+    各シナリオの想定 user input → routing 解析 → エージェント存在確認 →
+    期待ツール列挙、を高速実行する。
+    """
+    from src.orchestrator import verify_routing, verify_routing_yaml_integrity
+
+    print("\n" + "=" * 60)
+    print("E2E Dry-Run — routing only (no LLM, no Yahoo Finance)")
+    print("=" * 60 + "\n")
+
+    # 1) routing.yaml integrity check
+    integrity = verify_routing_yaml_integrity()
+    if integrity["passed"]:
+        print("✅ routing.yaml integrity: OK")
+    else:
+        print("❌ routing.yaml integrity: FAIL")
+    for err in integrity["errors"]:
+        print(f"   ❌ {err}")
+    for warn in integrity["warnings"][:5]:
+        print(f"   ⚠️  {warn}")
+    if len(integrity["warnings"]) > 5:
+        print(f"   ⚠️  ... and {len(integrity['warnings']) - 5} more warnings")
+    print()
+
+    # 2) シナリオ別 routing 検証（典型的入力例）
+    sample_inputs = {
+        "e2e_001": "いい日本株ある？",
+        "e2e_002": "トヨタってどう？",
+        "e2e_003": "PF大丈夫？",
+        "e2e_004": "最新ニュース教えて",
+        "e2e_005": "リスク判定して",
+        "e2e_006": "PFを改善したい",
+        "e2e_007": "この株売るべき？",
+    }
+    pass_count, fail_count = 0, 0
+    for sid, user_in in sample_inputs.items():
+        r = verify_routing(user_in)
+        ok = r.passed
+        status = "✅" if ok else "❌"
+        agents = ",".join(r.agents) if r.agents else (r.flags.get("action") or "?")
+        print(f"  {status} {sid}: {user_in!r}")
+        print(f"      → matched: {r.matched_intent!r}  agents: {agents}")
+        if r.expected_tools:
+            print(f"      → tools: {', '.join(r.expected_tools)}")
+        for warn in r.warnings:
+            print(f"      ⚠️  {warn}")
+        for err in r.errors:
+            print(f"      ❌ {err}")
+        if ok:
+            pass_count += 1
+        else:
+            fail_count += 1
+
+    print("\n" + "=" * 60)
+    print(f"Dry-run結果: {pass_count} PASS / {fail_count} FAIL")
+    print("=" * 60)
+    return fail_count == 0 and integrity["passed"]
+
+
 if __name__ == "__main__":
-    ids = sys.argv[1:] if len(sys.argv) > 1 else None
-    success = run_scenarios(ids)
+    args = sys.argv[1:]
+    if "--dry-run" in args:
+        success = run_dry_run()
+    else:
+        ids = args if args else None
+        success = run_scenarios(ids)
     sys.exit(0 if success else 1)
