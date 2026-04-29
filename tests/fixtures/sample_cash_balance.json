@@ -1,0 +1,18 @@
+{
+  "date": "2026-04-29",
+  "timestamp": "2026-04-29T00:00:00",
+  "total_jpy": 1000000,
+  "breakdown": {
+    "USD": {
+      "amount": 5000.00,
+      "jpy_equivalent": 800000,
+      "rate_jpy_per_usd": 160.00
+    },
+    "JPY": {
+      "amount": 200000
+    }
+  },
+  "changelog": [
+    "sample fixture for testing — not a real cash balance"
+  ]
+}

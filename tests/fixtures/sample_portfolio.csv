@@ -1,0 +1,7 @@
+symbol,shares,cost_price,cost_currency,purchase_date,memo,next_earnings,div_yield,buyback_yield,total_return,beta,role
+AAPL,50,180.50,USD,2026-01-15,sample fixture,2026-05-01,0.5,1.2,1.7,1.15,グロース
+MSFT,30,420.00,USD,2026-02-01,sample fixture,2026-04-23,0.8,1.5,2.3,1.11,グロース
+7203.T,100,2500.00,JPY,2026-01-20,sample fixture,2026-05-09,2.1,0.0,2.1,0.95,長期インカム
+1925.T,80,5000.00,JPY,2025-06-10,sample fixture,2026-06-15,3.4,1.5,4.9,0.34,長期インカム
+GLDM,40,100.50,USD,2025-11-01,sample fixture,,0.0,0.0,0.0,0.05,ヘッジ
+XOM,25,110.00,USD,2026-03-05,sample fixture,2026-05-02,3.2,2.1,5.3,1.08,長期インカム

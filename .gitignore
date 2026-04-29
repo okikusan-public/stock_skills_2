@@ -4,6 +4,11 @@
 data/
 !data/.gitkeep
 
+# tests/fixtures/sample_*.{csv,json} は明示的に追跡対象（KIK-745）
+# 汎用テストデータなので、個人PFと混同しないよう明示ホワイトリスト。
+!tests/fixtures/sample_portfolio.csv
+!tests/fixtures/sample_cash_balance.json
+
 __pycache__/
 *.pyc
 .venv/

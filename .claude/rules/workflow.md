@@ -10,24 +10,41 @@
 
 ## 1. Worktree 作成
 
+**推奨**: ヘルパースクリプトで一括セットアップ（KIK-745）
+
 ```bash
-# Linear issue KIK-NNN に対して
+bash scripts/setup_worktree.sh KIK-NNN [short-desc]
+# → worktree作成 + sample fixture コピー (個人PFは触らない)
+# → ~/stock-skills-kik{NNN} に展開、即 pytest 実行可能
+```
+
+手動の場合:
+
+```bash
 git worktree add -b feature/kik-{NNN}-{short-desc} ~/stock-skills-kik{NNN} main
+mkdir -p ~/stock-skills-kik{NNN}/data
+cp tests/fixtures/sample_portfolio.csv ~/stock-skills-kik{NNN}/data/portfolio.csv
+cp tests/fixtures/sample_cash_balance.json ~/stock-skills-kik{NNN}/data/cash_balance.json
 ```
 
 - 作業ディレクトリ: `~/stock-skills-kik{NNN}`
 - ブランチ名: `feature/kik-{NNN}-{short-desc}`
 - 以降のすべての作業（実装・テスト・結合試験）はこのworktree上で行う
 
-### Worktree 上の準備（gitignore対象ファイル）
+### Worktree 上の準備（KIK-745 で更新）
 
-結合試験でポートフォリオ系コマンドを使う場合、gitignore対象のデータをコピーする:
+⚠️ **個人PF（`~/stock-skills/data/portfolio.csv` など）を `cp` で worktree に
+コピーすることは禁止**。誤って `git add -f` した場合に個人銘柄・実数量が
+公開リポへリークするため。
 
-```bash
-mkdir -p ~/stock-skills-kik{NNN}/data
-cp ~/stock-skills/data/portfolio.csv \
-   ~/stock-skills-kik{NNN}/data/
-```
+代わりに以下のいずれかを使用:
+
+1. `tests/fixtures/sample_portfolio.csv` の汎用テスト銘柄（推奨）
+2. 環境変数で個人 PF を**読み取り専用参照**:
+   ```bash
+   export STOCK_SKILLS_DATA_DIR=$HOME/stock-skills/data
+   # tools/portfolio_io.py の csv_path 引数に渡す
+   ```
 
 ## 2. 設計フェーズ
 
