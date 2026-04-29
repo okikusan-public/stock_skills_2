@@ -116,12 +116,28 @@ docker compose up -d
 ## テスト
 
 ```bash
-# ユニットテスト
-python3 -m pytest tests/ -q           # 約979テスト (~4秒)
+# ユニットテスト（API key/ネットワーク不要、autouse fixture で外部I/Oを完全モック）
+python3 -m pytest tests/ -q           # 1381 テスト (~55秒)
 
-# E2E テスト（実際の API を叩いてエージェント動作を検証）
-python3 tests/e2e/run_e2e.py          # 全6シナリオ実行
+# Dry-run（routing.yaml + agent定義の整合性検証、< 1秒、API key不要）KIK-746
+python3 tests/e2e/run_e2e.py --dry-run
+
+# モック E2E（pytest fixture で tools 層 stub 化、< 1秒、API key不要）KIK-747
+python3 -m pytest tests/e2e/test_mocked.py -q
+
+# 実 API E2E テスト（Yahoo Finance / LLM 実呼び出し、要 API key）
+python3 tests/e2e/run_e2e.py          # 全シナリオ実行 (~25秒)
 python3 tests/e2e/run_e2e.py e2e_001  # 特定シナリオのみ
+```
+
+### Worktree セットアップ（KIK-745）
+
+開発用 worktree は `scripts/setup_worktree.sh` で個人PFを使わず即セットアップ:
+
+```bash
+bash scripts/setup_worktree.sh KIK-NNN feature-name
+# → ~/stock-skills-kikNNN に展開、tests/fixtures/sample_portfolio.csv を
+#    data/ にコピー（汎用テスト銘柄、個人PFは流さない）
 ```
 
 ### E2E テストシナリオ

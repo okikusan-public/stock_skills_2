@@ -22,11 +22,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-# ユニットテスト
+# ユニットテスト（API key/ネットワーク不要、約1381テスト）
 python3 -m pytest tests/ -q
 
-# E2E テスト（実際の API でエージェント動作検証）
+# Dry-run（routing.yaml + agent定義の整合性検証、< 1秒）KIK-746
+python3 tests/e2e/run_e2e.py --dry-run
+
+# モック E2E（pytest fixture で tools 層 stub 化、< 1秒）KIK-747
+python3 -m pytest tests/e2e/test_mocked.py -q
+
+# 実 API E2E テスト（実際の API でエージェント動作検証、要 API key）
 python3 tests/e2e/run_e2e.py
+
+# 開発用 worktree セットアップ（KIK-745、個人PFを流さない）
+bash scripts/setup_worktree.sh KIK-NNN [short-desc]
 
 # 依存インストール
 pip install -r requirements.txt
@@ -90,6 +99,13 @@ Data (src/data/)
   portfolio_io.py — PF CSV 読み書き
   scoring.py     — 3軸品質スコアリング（還元性・成長性・持続性）
 
+Orchestrator (src/orchestrator/) — KIK-746
+  dry_run.py     — routing.yaml + agent定義の整合性検証（API呼ばない）
+                   verify_routing(user_input), verify_routing_yaml_integrity()
+
+Scripts (scripts/) — KIK-745
+  setup_worktree.sh — worktree作成 + sample fixture コピー一括化（個人PFを流さない）
+
 Config: .claude/agents/screener/examples.yaml (regions, themes, presets, few-shot)
 Config: config/scoring.yaml (スコアリング重み・閾値・セクター別設定)
 Config: config/allocation.yaml (PFターゲットアロケーション・集中度制約・乖離判定)
@@ -97,7 +113,12 @@ Config: config/etf_universe.yaml (ETF定番リスト — セクター/債券/コ
 Config: config/llm_routing.yaml (LLM選択・モデルルーティング・コスト定義)
 Rules:  .claude/rules/ (development, workflow, testing)
 Docs:   docs/ (architecture, neo4j-schema, data-models)
-Tests:  tests/ (unit), tests/e2e/ (E2E agent scenarios)
+Tests:  tests/ (unit ~1381件), tests/e2e/ (E2E)
+        - run_e2e.py: 実 API シナリオ実行
+        - run_e2e.py --dry-run: routing検証のみ（< 1秒）KIK-746
+        - test_mocked.py: モック E2E（pytest fixture で tools stub）KIK-747
+Fixtures: tests/fixtures/sample_portfolio.csv / sample_cash_balance.json
+          (KIK-745、汎用テスト銘柄、worktree結合試験で個人PF代替)
 ```
 
 ## Post-Implementation Rule

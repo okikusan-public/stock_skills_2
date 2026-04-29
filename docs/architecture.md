@@ -136,3 +136,39 @@ orchestration.yaml に基づく自律修正ループ。スクリーニング0件
 | grok.py | src/data/grok_client/ | Grok API（X/Web検索） |
 | llm.py | (直接API呼び出し) | Gemini/GPT/Grok マルチLLM |
 
+## Testing & Worktree Tooling（KIK-745/746/747）
+
+クリーン環境（API key無し・個人PFなし）でも結合試験を回せる三層構成:
+
+```
+[Layer A] Unit Tests (~1381件、autouse mock)
+  python3 -m pytest tests/ -q
+  → tests/conftest.py:_block_external_io が Neo4j/TEI/Grok を全自動モック
+
+[Layer B] Dry-run (KIK-746、< 1秒)
+  python3 tests/e2e/run_e2e.py --dry-run
+  → src/orchestrator/dry_run.py で routing.yaml 整合性 + agent定義存在確認
+  → LLM/Yahoo Finance 一切呼ばない、API key 不要
+
+[Layer C] Mocked E2E (KIK-747、< 1秒)
+  python3 -m pytest tests/e2e/test_mocked.py -q
+  → pytest fixture で tools/llm.py / tools/yahoo_finance.py / tools/grok.py を stub
+  → agent.md / examples.yaml は実物を使用、外部I/Oだけ差し替え
+
+[Layer D] Real-API E2E (要 API key、~25秒)
+  python3 tests/e2e/run_e2e.py
+  → 実 Yahoo Finance / 実 LLM を呼ぶ最終検証
+```
+
+### Worktree フロー（KIK-745）
+
+```
+scripts/setup_worktree.sh KIK-NNN feature-name
+  ├─ git worktree add -b feature/kik-NNN-feature-name ~/stock-skills-kikNNN
+  ├─ tests/fixtures/sample_portfolio.csv → ~/stock-skills-kikNNN/data/portfolio.csv
+  └─ tests/fixtures/sample_cash_balance.json → ~/stock-skills-kikNNN/data/cash_balance.json
+
+⚠ 個人PF（~/stock-skills/data/portfolio.csv）を worktree に cp することは禁止。
+   誤コミットでの個人銘柄リーク防止のため、汎用テスト銘柄のみ使用する。
+```
+
