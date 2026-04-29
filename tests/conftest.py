@@ -115,6 +115,8 @@ def _block_external_io(request, monkeypatch):
     monkeypatch.setenv("NEO4J_MODE", "off")
     monkeypatch.setattr("src.data.graph_store._get_driver", lambda: None)
     monkeypatch.setattr("src.data.graph_store.is_available", lambda: False)
+    # TODO(next-issue): drop this monkeypatch — `_unavailable_warned` is now
+    # only consulted inside is_available(), which is already stubbed above.
     monkeypatch.setattr("src.data.graph_store._unavailable_warned", True)
     # KIK-743: mode cache の TTL 30s でテスト間に値がリークするため、
     #          fixture 開始時に明示リセットして monkeypatch を確実に反映させる。

@@ -22,7 +22,14 @@ _NEO4J_USER = os.environ.get("NEO4J_USER", "neo4j")
 _NEO4J_PASSWORD = os.environ.get("NEO4J_PASSWORD", "password")
 
 _driver = None
-_unavailable_warned = False  # KIK-443: warn once on connection failure
+# Once-only guard for NEO4J_DEBUG=1 diagnostics (also kept as a stable
+# attribute for tests that monkeypatch ``src.data.graph_store._unavailable_warned``).
+_unavailable_warned = False
+
+
+def _debug_enabled() -> bool:
+    """Return True if NEO4J_DEBUG is set to a truthy value (1/true/yes)."""
+    return os.environ.get("NEO4J_DEBUG", "").strip().lower() in ("1", "true", "yes")
 
 
 # ---------------------------------------------------------------------------
@@ -82,33 +89,30 @@ def _get_driver():
 
 
 def is_available() -> bool:
-    """Check if Neo4j is reachable."""
+    """Check if Neo4j is reachable.
+
+    Neo4j is optional in this project (dual-write view side; the master is
+    ``data/`` JSON/CSV). Failures are silent by default. Set
+    ``NEO4J_DEBUG=1`` (or ``true``/``yes``) to emit a one-line diagnostic on
+    stderr the first time per process — repeated failures stay quiet to avoid
+    log spam, since this function is called repeatedly via ``_get_mode()``.
+    """
     global _unavailable_warned
     driver = _get_driver()
     if driver is None:
-        if not _unavailable_warned:
-            print(
-                "⚠️  Neo4jに接続できません\n"
-                "    原因: Dockerコンテナが起動していない可能性があります\n"
-                "    対処: docker compose up -d を実行してください\n"
-                "    → Neo4jなしで続行します（コンテキストなし）",
-                file=sys.stderr,
-            )
+        if _debug_enabled() and not _unavailable_warned:
+            print("[neo4j] driver init failed", file=sys.stderr)
             _unavailable_warned = True
         return False
     try:
         driver.verify_connectivity()
-        _unavailable_warned = False  # reset on successful connection
+        _unavailable_warned = False  # reset once connectivity recovers
         return True
-    except Exception:
-        if not _unavailable_warned:
-            print(
-                "⚠️  Neo4jに接続できません\n"
-                "    原因: Dockerコンテナが起動していない可能性があります\n"
-                "    対処: docker compose up -d を実行してください\n"
-                "    → Neo4jなしで続行します（コンテキストなし）",
-                file=sys.stderr,
-            )
+    except Exception as exc:
+        if _debug_enabled() and not _unavailable_warned:
+            # Avoid leaking URI / host / credentials by emitting only the
+            # exception class name, not its repr.
+            print(f"[neo4j] connection failed: {type(exc).__name__}", file=sys.stderr)
             _unavailable_warned = True
         return False
 
