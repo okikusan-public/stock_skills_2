@@ -34,6 +34,7 @@ export OPENAI_API_KEY=sk-proj-...
 # Neo4j（GraphRAG、任意）
 export NEO4J_URI=bolt://localhost:7688
 export NEO4J_MODE=full  # off/summary/full
+export NEO4J_DEBUG=1    # 接続失敗時の診断を初回1回だけ stderr に出す（既定: 無音）
 ```
 
 すべて任意。未設定でもデフォルト値で動作する。
@@ -111,7 +112,7 @@ Data (src/data/) — yahoo_client, grok_client, graph_store, graph_query, common
 docker compose up -d
 ```
 
-**新規利用は data/ ローカルストレージで完結します。Neo4j はオプション機能です。** 既に Neo4j を運用中の方はそのまま使い続けられます（graceful degradation 完全対応）。Neo4j 未接続時は `data/notes/`・`data/portfolio.csv`・`data/screening_results/` 等から自動コンテキスト注入が動作します（KIK-719）。
+**新規利用は data/ ローカルストレージで完結します。Neo4j はオプション機能です。** 既に Neo4j を運用中の方はそのまま使い続けられます（graceful degradation 完全対応）。Neo4j 未接続時は `data/notes/`・`data/portfolio.csv`・`data/screening_results/` 等から自動コンテキスト注入が動作します（KIK-719）。未接続時の警告は出力されません。診断したい場合は `NEO4J_DEBUG=1`（KIK-749）。
 
 ## テスト
 
